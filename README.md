@@ -22,38 +22,46 @@ scene, and scans `Mods/` for mod DLLs.
 
 ## Install (players)
 
-1. Download the latest release and unzip it. Keep the files together
-   (`RuinarchModLoader.Patcher`, `Ruinarch.Modding.dll`, `0Harmony.dll`).
-2. Run the patcher, pointing it at your Ruinarch install folder (the one with
-   `Ruinarch.exe`):
+### Easy way: the installer app (recommended)
 
-   ```bash
-   # Linux
-   dotnet RuinarchModLoader.Patcher.dll --game "/path/to/Ruinarch"
-   ```
-   ```bat
-   REM Windows
-   RuinarchModLoader.Patcher.exe --game "C:\Program Files (x86)\Steam\steamapps\common\Ruinarch"
-   ```
+A small graphical installer does everything for you. It bundles the .NET
+runtime, so there is nothing else to install.
 
-   Find the folder in Steam: right-click Ruinarch, Manage, Browse local files.
-3. Put mods in the `Mods/` folder that now sits next to `Ruinarch.exe`
-   (each mod is a `.dll`, optionally in its own subfolder).
-4. Launch the game normally through Steam.
+1. Download the installer for your OS from the latest
+   [release](https://github.com/Xm0x/RuinarchModLoader/releases):
+   - Windows: `RuinarchModLoader-Installer-<version>-win-x64.zip`
+   - Linux: `RuinarchModLoader-Installer-<version>-linux-x64.zip`
+2. Unzip it (keep the files together) and run it:
+   - Windows: double-click `RuinarchModLoader.Installer.exe`
+   - Linux: `./RuinarchModLoader.Installer`
+3. It finds your Ruinarch install automatically (or use **Browse**). Click
+   **Install**.
+4. Drop mods into the `Mods/` folder it opens, then launch Ruinarch through
+   Steam. **Uninstall** is a button in the same window (clean revert).
 
-Check `Mods/mods.log` to see what loaded.
+> After a game update Steam replaces `Assembly-CSharp.dll`; just open the
+> installer again and click **Reinstall**.
 
-### Uninstall
+### Command line (advanced)
+
+The release also ships a CLI patcher (this one needs the .NET 8 runtime). With
+no `--game`, it scans your Steam libraries automatically.
+
+```bash
+# Linux
+dotnet RuinarchModLoader.Patcher.dll --game "/path/to/Ruinarch"
+```
+```bat
+REM Windows
+RuinarchModLoader.Patcher.exe --game "C:\Program Files (x86)\Steam\steamapps\common\Ruinarch"
+```
+
+Find the folder in Steam: right-click Ruinarch, Manage, Browse local files.
+Check `Mods/mods.log` to see what loaded. Uninstall reverts cleanly:
 
 ```bash
 dotnet RuinarchModLoader.Patcher.dll --game "/path/to/Ruinarch" --uninstall
 ```
-
-Restores the original `Assembly-CSharp.dll` and removes the loader. Your `Mods/`
-folder is left alone.
-
-> After a game update, Steam replaces `Assembly-CSharp.dll`. Just run the patcher
-> again to re-install.
 
 ## Writing a mod
 
@@ -107,6 +115,10 @@ installs the result into the target `Mods/` folder (with `0Harmony.dll`).
 ```bash
 export RUIN_GAME_DIR="/path/to/Ruinarch"   # your install (for build-time refs)
 tools/build.sh                              # loader + patcher -> build/
+```
+
+```bash
+tools/build-gui.sh                          # graphical installer -> build/gui/{linux-x64,win-x64}
 ```
 
 `build/patcher/` then holds the patcher plus `Ruinarch.Modding.dll` and

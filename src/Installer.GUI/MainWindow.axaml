@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Ruinarch.Modding.Installer.MainWindow"
+        Width="660" Height="520"
+        MinWidth="560" MinHeight="440"
+        WindowStartupLocation="CenterScreen"
+        Title="Ruinarch Mod Loader Installer">
+
+  <DockPanel Margin="18">
+
+    <StackPanel DockPanel.Dock="Top" Spacing="10">
+
+      <TextBlock Text="Ruinarch Mod Loader" FontSize="22" FontWeight="Bold"/>
+      <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                 Text="Installs a Harmony-based mod loader into your own copy of Ruinarch. It backs up the original assembly, so Uninstall is a clean revert. Drop mods into the Mods folder and launch the game."/>
+
+      <TextBlock Text="Ruinarch install folder" Margin="0,6,0,0" FontWeight="SemiBold"/>
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBox x:Name="PathBox" Grid.Column="0"
+                 Watermark="path to your Ruinarch install (the folder with Ruinarch.exe)"/>
+        <Button x:Name="DetectBtn" Grid.Column="1" Content="Detect" Margin="8,0,0,0" Click="OnDetect"/>
+        <Button x:Name="BrowseBtn" Grid.Column="2" Content="Browse..." Margin="8,0,0,0" Click="OnBrowse"/>
+      </Grid>
+
+      <Border Background="#22FFFFFF" CornerRadius="6" Padding="10,8">
+        <TextBlock x:Name="StatusText" Text="Status: checking..." FontWeight="SemiBold"/>
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button x:Name="InstallBtn" Content="Install" Width="150" Click="OnInstall"/>
+        <Button x:Name="UninstallBtn" Content="Uninstall" Width="120" Click="OnUninstall"/>
+        <Button x:Name="ModsBtn" Content="Open Mods Folder" Click="OnOpenMods"/>
+      </StackPanel>
+
+      <TextBlock Text="Log" Margin="0,6,0,0" FontWeight="SemiBold"/>
+    </StackPanel>
+
+    <Border BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="6">
+      <TextBox x:Name="LogBox"
+               IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+               FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
+               Background="Transparent" BorderThickness="0"
+               VerticalContentAlignment="Top"
+               ScrollViewer.VerticalScrollBarVisibility="Auto"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+    </Border>
+
+  </DockPanel>
+</Window>

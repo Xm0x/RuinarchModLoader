@@ -54,3 +54,32 @@ EOF
 ( cd "$MOD_PROJECT_DIR/dist" && zip -qr "$name.zip" "$name" )
 echo "OK -> dist/$name.zip"
 du -h "$MOD_PROJECT_DIR/dist/$name.zip" | cut -f1
+
+# --- Graphical installer (self-contained: no .NET runtime needed on target) ---
+echo ">>> building graphical installers"
+"$MOD_PROJECT_DIR/tools/build-gui.sh" >/dev/null
+for rid in linux-x64 win-x64; do
+	gdir="$MOD_BUILD_DIR/gui/$rid"
+	[ -d "$gdir" ] || { echo "missing $gdir" >&2; exit 1; }
+	gname="RuinarchModLoader-Installer-$VERSION-$rid"
+	stage="$MOD_PROJECT_DIR/dist/$gname"
+	rm -rf "$stage"; mkdir -p "$stage"
+	cp "$gdir"/* "$stage"/
+	cp "$MOD_PROJECT_DIR/LICENSE" "$stage"/
+	if [ "$rid" = "win-x64" ]; then run="Double-click RuinarchModLoader.Installer.exe"; else run="Run ./RuinarchModLoader.Installer"; fi
+	cat > "$stage/INSTALL.txt" <<EOF
+RuinarchModLoader - graphical installer
+
+No .NET runtime needed; everything is bundled.
+
+1. Keep every file in this folder together.
+2. $run
+3. It finds your Ruinarch install automatically (or click Browse).
+4. Click Install. Drop mods into the Mods folder it creates, then launch
+   Ruinarch through Steam. Uninstall reverts the game cleanly.
+
+This tool ships no game code or assets. It edits a copy of Ruinarch you own.
+EOF
+	( cd "$MOD_PROJECT_DIR/dist" && zip -qr "$gname.zip" "$gname" )
+	echo "OK -> dist/$gname.zip ($(du -h "$MOD_PROJECT_DIR/dist/$gname.zip" | cut -f1))"
+done
