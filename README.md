@@ -4,9 +4,8 @@ A first-class mod loader for **Ruinarch**, with [Harmony](https://github.com/par
 runtime patching built in. Install it into your own copy of the game, drop mods
 in a folder, and they load at startup. No BepInEx, no external injector.
 
-> This is a fan-made modding tool. It ships **no game code or assets**. It edits
-> a copy of Ruinarch that **you already own**, on your own machine. You need a
-> legitimate copy of the game.
+> This is a fan-made modding tool that edits a copy of Ruinarch you already own.
+> You need a legitimate copy of the game.
 
 ## How it works
 
@@ -125,18 +124,7 @@ tools/build-gui.sh                          # graphical installer -> build/gui/{
 `0Harmony.dll`, ready to run or package with `tools/package-release.sh`.
 
 Requirements: .NET SDK (8.x) and a legitimate Ruinarch install to reference the
-game's Unity DLLs at build time. Nothing from the game is committed or shipped.
-
-## Notes
-
-- **Normal Steam launch works.** If you launch `Ruinarch.exe` directly (outside
-  Steam) while the Steam client is running, Steamworks may bounce the process in
-  a restart loop; that is a launch-environment quirk, not a loader issue. Launch
-  through Steam.
-- `mods.log` is flushed on every write; the Unity `Player.log` is buffered, so
-  `mods.log` is the reliable place to watch mod output.
-- A mod that throws while loading is logged and skipped; it never takes down the
-  game or other mods.
+game's Unity DLLs at build time.
 
 ## License
 
