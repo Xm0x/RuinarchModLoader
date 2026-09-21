@@ -1,0 +1,26 @@
+# No game binaries, ever. The patcher works on the user's own install.
+*.dll
+*.exe
+*.pdb
+
+# Fetched/build outputs
+lib/
+build/
+bin/
+obj/
+dist/
+
+# Local test copy of a game install (never commit)
+testgame/
+testprefix/
+
+# Editor / OS
+.vs/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Keep our source even though *.dll is ignored above
+!src/**/*.cs
+!examples/**/*.cs

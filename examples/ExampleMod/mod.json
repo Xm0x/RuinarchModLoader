@@ -1,0 +1,7 @@
+{
+  "id": "example.mod",
+  "name": "Example Mod",
+  "version": "1.0.0",
+  "author": "RuinarchModLoader",
+  "description": "Reference mod: logs on load and patches the main menu with Harmony to prove the pipeline works."
+}
