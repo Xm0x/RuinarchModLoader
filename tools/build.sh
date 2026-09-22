@@ -33,6 +33,9 @@ dotnet "$CSC" "@$rsp" || { echo "loader build FAILED" >&2; rm -f "$rsp"; exit 1;
 rm -f "$rsp"
 echo "OK -> build/Ruinarch.Modding.dll"
 
+# --- Content framework: references the game DLL + Harmony (unlike the loader) ---
+"$MOD_PROJECT_DIR/tools/build-framework.sh"
+
 # --- Patcher: normal SDK build ---
 dotnet build "$MOD_PROJECT_DIR/src/Patcher/Patcher.csproj" -c Release -o "$MOD_BUILD_DIR/patcher" -v quiet
 echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
@@ -40,4 +43,5 @@ echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
 # --- Stage loader + Harmony next to the patcher so install can find them ---
 cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_LIB_DIR/0Harmony.dll"           "$MOD_BUILD_DIR/patcher/"
+cp "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/patcher/"
 echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll)"

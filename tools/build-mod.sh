@@ -34,6 +34,7 @@ rsp="$(mktemp)"
   # Reference every game assembly, plus the modding API and Harmony.
   for dll in "$RUIN_MANAGED_DIR"/*.dll; do echo "-r:$dll"; done
   echo "-r:$MOD_BUILD_DIR/Ruinarch.Modding.dll"
+  echo "-r:$MOD_BUILD_DIR/Ruinarch.ModContent.dll"
   echo "-r:$MOD_LIB_DIR/0Harmony.dll"
   find "$src" -name '*.cs' -print
 } > "$rsp"
@@ -43,6 +44,9 @@ rm -f "$rsp"
 [ -f "$src/mod.json" ] && cp "$src/mod.json" "$outdir/"
 # Ensure Harmony is present in the Mods root so the loader resolves it.
 cp "$MOD_LIB_DIR/0Harmony.dll" "$target/0Harmony.dll"
+# Ensure the content framework is present in the Mods root so mods that add new
+# content resolve it (and it self-installs its patches on first use).
+cp "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$target/Ruinarch.ModContent.dll"
 
 echo "OK -> $outdir/$name.dll"
 echo "     $target/0Harmony.dll"
