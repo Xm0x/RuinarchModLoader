@@ -24,6 +24,7 @@ namespace Ruinarch.Modding.Patcher
 		public const string LoaderType = "Ruinarch.Modding.ModLoader";
 		public const string LoaderMethod = "Initialize";
 		public const string Harmony = "0Harmony.dll";
+		public const string ContentFramework = "Ruinarch.ModContent.dll";
 
 		/// <summary>
 		/// Resolve the Managed/ directory that holds Assembly-CSharp.dll from a
@@ -131,6 +132,21 @@ namespace Ruinarch.Modding.Patcher
 				Directory.CreateDirectory(modsDir);
 				File.Copy(harmonySrc, Path.Combine(modsDir, Harmony), overwrite: true);
 				log($"Installed {Harmony} -> Mods/");
+
+				// The content-injection framework (new structures/skills) ships in
+				// Mods/ like Harmony. It is optional: a minimal package may omit it,
+				// and mods that never call the ModContent API do not need it.
+				string contentSrc = FindNextTo(ContentFramework, loaderSrcDirs);
+				if (contentSrc != null)
+				{
+					File.Copy(contentSrc, Path.Combine(modsDir, ContentFramework), overwrite: true);
+					log($"Installed {ContentFramework} -> Mods/");
+				}
+				else
+				{
+					log($"Note: {ContentFramework} not bundled; content mods that add new " +
+						"structures/skills need it dropped into Mods/.");
+				}
 
 				// 3) Always read from the pristine backup and write the live dll, so
 				//    re-running installs exactly one call and can never double-inject.

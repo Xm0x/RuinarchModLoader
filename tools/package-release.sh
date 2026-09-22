@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build everything and assemble a distributable release zip under dist/.
 # The zip contains ONLY our code + MIT Harmony: the patcher, the loader assembly,
-# 0Harmony, install notes, and the example mod source. No game files.
+# the content framework, 0Harmony, install notes, and the example mod source.
+# No game files.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
@@ -21,6 +22,7 @@ cp "$MOD_BUILD_DIR"/patcher/RuinarchModLoader.Patcher.runtimeconfig.json "$dist/
 cp "$MOD_BUILD_DIR"/patcher/Mono.Cecil*.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.Modding.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/0Harmony.dll "$dist/"
+cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModContent.dll "$dist/"
 
 # Docs + example source
 cp "$MOD_PROJECT_DIR/README.md" "$dist/"

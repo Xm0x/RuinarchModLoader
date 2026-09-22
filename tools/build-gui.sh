@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Publish the graphical installer as a self-contained, single-file binary for
-# Windows and Linux. Each output folder holds the installer plus the two files
-# it drops into the game (Ruinarch.Modding.dll, 0Harmony.dll), so the folder is
+# Windows and Linux. Each output folder holds the installer plus the files it
+# drops into the game (Ruinarch.Modding.dll, 0Harmony.dll, Ruinarch.ModContent.dll),
 # ready to zip and ship.
 #
 # Usage: tools/build-gui.sh [out-dir]   (default: build/gui)
@@ -27,7 +27,7 @@ for rid in linux-x64 win-x64; do
 		-p:DebugType=none \
 		-o "$dest" >/dev/null
 	rm -f "$dest"/*.pdb "$dest"/*.runtimeconfig.json
-	cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$dest"/
+	cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$dest"/
 	exe=$(find "$dest" -maxdepth 1 -name 'RuinarchModLoader.Installer*' ! -name '*.dll' | head -1)
 	echo "    -> $exe ($(du -h "$exe" | cut -f1))"
 done
