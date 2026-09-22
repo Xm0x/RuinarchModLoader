@@ -147,6 +147,18 @@ namespace Ruinarch.ModContent
 		}
 	}
 
+	[HarmonyPatch(typeof(Extensions), "IsVillageStructure", new Type[] { typeof(STRUCTURE_TYPE) })]
+	internal static class Patch_IsVillageStructure
+	{
+		private static void Postfix(STRUCTURE_TYPE __0, ref bool __result)
+		{
+			if (ContentRegistry.StructuresByType.TryGetValue((int)__0, out StructureRegistration reg) && reg.IsVillageStructure)
+			{
+				__result = true;
+			}
+		}
+	}
+
 	/// <summary>Unlock: when the player gains a registration's <c>UnlockWith</c> source skill,
 	/// also grant the registered virtual skill so it appears in the dynamic build menu.</summary>
 	[HarmonyPatch(typeof(PlayerSkillComponent), "AddAndCategorizePlayerSkill", new Type[] { typeof(SkillData), typeof(bool), typeof(bool) })]

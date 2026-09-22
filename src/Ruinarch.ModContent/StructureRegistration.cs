@@ -59,6 +59,7 @@ namespace Ruinarch.ModContent
 		public bool IsDemonic = true;
 		public bool IsPlayerStructure = true;
 		public bool IsSpecialStructure = false;
+		public bool IsVillageStructure = false;
 
 		// --- filled by the framework during RegisterStructure ---
 
