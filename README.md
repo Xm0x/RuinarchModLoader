@@ -99,8 +99,8 @@ Ship an optional `mod.json` next to your DLL:
 ```
 
 The full API and patterns are in [`docs/WRITING_MODS.md`](docs/WRITING_MODS.md).
-Adding **new content** — new structures/skills, sprites, sounds, AssetBundles —
-is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
+Adding **new content** (new structures and skills, sprites, sounds, and
+AssetBundles) is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
 
 ### Build a mod
 

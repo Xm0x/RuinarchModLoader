@@ -1,227 +1,318 @@
 # Assets & new content
 
-How to give a Ruinarch mod **new content** — new structures, new skills, new
-sprites, new sounds — without forking the game DLL and without shipping (or
-replacing) the game itself.
+This guide explains how to give a Ruinarch mod **new content**: new structures,
+new skills, new sprites, and new sounds. It assumes no prior knowledge beyond the
+basics in [`WRITING_MODS.md`](WRITING_MODS.md) (how a mod is loaded and how to
+patch the game with Harmony). Read that first if you haven't.
 
-Read [`WRITING_MODS.md`](WRITING_MODS.md) first for the loader + Harmony basics.
-This doc is about the two things plain Harmony can't do on its own: **adding new
-enum-backed content**, and **adding new art/audio**.
+Everything here works **without forking the game** and **without shipping or
+replacing the game itself**.
 
-> **The golden rule.** Everything a mod adds is an *additive file* under `Mods/`.
-> The stock `Assembly-CSharp.dll` stays stock, every game file is untouched, and
-> other mods keep working. You never rebuild, repackage, or redistribute the
-> game. This is the same footing every BepInEx-style mod stands on.
+> **The golden rule.** Every file a mod adds is a separate, additive file inside
+> the game's `Mods/` folder. The game's own `Assembly-CSharp.dll` and all of its
+> data files stay exactly as installed. Because nothing in the game is
+> overwritten, your mod coexists with other mods, and you never rebuild,
+> repackage, or redistribute any part of the game. This is the same approach that
+> mod loaders for other paid Unity games use.
 
 ---
 
 ## Two separate problems
 
-Modding "new content" is really two problems, and they have different answers:
+"Adding new content" is really two different jobs, and they have different
+solutions. It helps to keep them apart in your head:
 
-1. **New *logic/identity*** — a new `STRUCTURE_TYPE`, a new build skill, a new
-   class the game instantiates by enum name. Harmony patches *existing* methods;
-   it can't mint a new enum value or a new type. → solved by the **content
-   framework** (`Ruinarch.ModContent`), below.
-2. **New *art/audio*** — a sprite, an icon, a portrait, a structure's look, a
-   sound. → solved by the **asset ladder**, below.
+1. **New logic and identity.** A new structure type, a new build skill, or any
+   new "thing" the game creates by name. Harmony can change methods that already
+   exist, but it cannot invent a brand new type of structure on its own. This is
+   solved by the **content framework** described in Part 1.
+2. **New art and audio.** A sprite, an icon, a portrait, the look of a structure,
+   or a sound effect. This is solved by the **asset ladder** described in Part 2.
 
-A feature like Mass Grave uses both: the framework registers it as a real
-buildable structure, and (for now) it borrows an existing prefab's visual.
+A single feature often needs both: you register a new structure (Part 1) and then
+decide what it looks like (Part 2). Those are independent choices, which is why
+this guide keeps them in separate sections.
 
 ---
 
-## Part 1 — New logic: the content framework (`Ruinarch.ModContent`)
+## Background: how the game creates content
 
-### Why it's needed
+To understand why Part 1 exists, you need one fact about how Ruinarch works
+internally.
 
-The game instantiates content by **reflecting on an enum name**:
+Many kinds of content in Ruinarch are identified by an **enum value** (a named
+number in the game's code, for example `STRUCTURE_TYPE.CRYPT`). When the game
+needs to create one, it does not call your code directly. Instead it takes the
+enum's name, looks up a C# class with that name using reflection, and creates an
+instance of it. In simplified form:
 
 ```csharp
-Type.GetType("<ns>." + enumValue.ToStringEnumNoSpace() + ", Assembly-CSharp");
+// the game turns an enum value into a class name, finds that class, and builds it
+Type.GetType("<namespace>." + enumValue.Name + ", Assembly-CSharp");
 Activator.CreateInstance(...);
 ```
 
-Harmony can't add a new value to `STRUCTURE_TYPE` or a new class to
-`Assembly-CSharp`. Baking those into the game DLL was tried and **rejected** — it
-forks the DLL and pollutes the decompiled reference. The framework solves it
-without touching the DLL.
+Two consequences follow, and they define what modding can and cannot do:
 
-### How it works
+- To add a **new** structure, you would need a **new enum value** and a **new
+  class**. Harmony patches existing methods; it cannot add a new value to an enum
+  or a new class to the game's compiled assembly.
+- Editing the game's assembly to add them was tried and rejected: it permanently
+  changes the shipped game file and defeats the whole "stock game" approach.
 
-1. It allocates a **virtual enum value** — a cast-`int` in `[100000, 1000000)`,
-   derived deterministically from a string id via FNV-1a (so saves stay stable
-   across sessions and machines). `Enum.GetValues()` never returns these, so
-   world-gen and every "iterate all enum values" path ignores virtual content.
-   *This is why virtual content can't cause a world-gen crash.*
-2. It puts a Harmony **prefix** on each reflection factory: for a registered
-   virtual value it returns the mod's instance and skips the reflection. Stock
-   DLL untouched.
+Part 1 is the workaround that adds new enum-backed content **without** editing the
+game's assembly.
+
+---
+
+## Part 1: new logic, using the content framework
+
+The loader ships a small library, `Ruinarch.ModContent`, that lets a mod register
+genuinely new structures and skills. You call it from your mod's `OnLoad`; it
+installs the necessary Harmony patches automatically the first time you use it.
+
+### How it works, in plain terms
+
+1. **It invents a fake enum value for you.** When you register a structure, the
+   framework assigns it a number in a reserved range (100000 and up) that no
+   real game enum uses. That number is derived from the text id you provide,
+   using a hashing function, so the **same id always produces the same number**,
+   on every machine and in every session. That stability is what lets a saved
+   game reload your structure later.
+2. **It intercepts the game's "create by name" step.** Using a Harmony patch,
+   when the game tries to create content for one of these reserved numbers, the
+   framework hands back the object your mod supplied instead of failing. The
+   game's own assembly is never modified.
+
+A useful side effect: because these fake enum values are outside the real enum,
+any game code that lists "every value of the enum" (such as world generation)
+simply never sees them. That means your custom content cannot interfere with
+those systems.
 
 ### Registering a structure
 
+You describe your structure by filling in a small object and passing it to
+`RegisterStructure`. Every field is explained in the comments:
+
 ```csharp
-var reg = ModContent.RegisterStructure(new StructureRegistration {
-    Id           = "yourmod.thing",                 // stable → deterministic virtual enum
-    Factory      = (type, region)       => new Thing(type, region),
-    LoadFactory  = (type, region, save) => new Thing(region, (SaveDataDemonicStructure)save),
-    PrefabSource = STRUCTURE_TYPE.CRYPT,             // reuse an existing visual (see Part 2)
-    Skill        = new ThingData(),                 // its `type` getter → ModContent.SkillTypeFor(Id)
-    UnlockWith   = PLAYER_SKILL_TYPE.CRYPT,          // appears in the build menu with the Crypt
+var registration = ModContent.RegisterStructure(new StructureRegistration {
+    // A stable, unique text id for your structure. This is what produces the
+    // deterministic fake enum value, so never change it once players have saves.
+    Id = "yourname.yourstructure",
+
+    // How to build a fresh instance when the player constructs it.
+    Factory = (type, region) => new YourStructure(type, region),
+
+    // How to rebuild it when a saved game is loaded.
+    LoadFactory = (type, region, save) =>
+        new YourStructure(region, (SaveDataDemonicStructure)save),
+
+    // Which existing structure's visual to borrow (see Part 2, Rung 1).
+    // Reusing an existing look means you need no art at all to start.
+    PrefabSource = STRUCTURE_TYPE.CRYPT,
+
+    // The build skill that adds your structure to the build menu.
+    Skill = new YourStructureData(),
+
+    // The existing skill your structure appears alongside in the build menu.
+    // Here, it shows up wherever the Crypt does.
+    UnlockWith = PLAYER_SKILL_TYPE.CRYPT,
 });
 ```
 
-`ModContent` self-installs its Harmony patches on first use. The
-[Mass Grave feature](https://github.com/Xm0x/RuinarchMods) is the reference
-consumer.
+`YourStructure` and `YourStructureData` are classes you write in your mod. You do
+not need to edit the game to create them; they live entirely in your mod's DLL.
 
-### What the framework is / isn't for
+### When you need the framework, and when you don't
 
-- **For:** content that needs *new enum values + new classes* the game reflects
-  into (new structures, new build skills).
-- **Not needed for:** pure mechanics/behaviour changes — those are plain Harmony
-  patches (see `WRITING_MODS.md`), already easy.
-- **Limit:** because virtual values are invisible to `Enum.GetValues()`, drive
-  your content through the *specific* factories, never through code that
-  enumerates every enum value.
+- **Use the framework** when you are adding content that the game creates by
+  name: a new structure type or a new build skill.
+- **You do not need it** for changing behaviour that already exists (making an
+  existing action cheaper, altering a rule, and so on). Those are ordinary
+  Harmony patches, covered in `WRITING_MODS.md`.
+- **One limitation to remember:** because your content's enum value is invisible
+  to code that lists all enum values, always trigger your content through the
+  specific registration above, never by expecting it to appear in a "for every
+  enum value" loop.
 
 ---
 
-## Part 2 — New art/audio: the asset ladder
+## Part 2: new art and audio, using the asset ladder
 
-Ruinarch is a **2D sprite game on Unity 2020.3.20f1**. That's the single most
-important fact for assets: most "new art" is just swapping `Sprite`s, which needs
-**no Unity editor at all**. Only a genuinely new *shape/footprint* needs the
-editor. Pick the lowest rung that does the job.
+The single most important fact for art is that **Ruinarch is a 2D sprite game
+built in Unity version 2020.3.20f1**. Because it is 2D, most "new art" is simply
+providing a new sprite (a flat image), and providing a sprite does **not** require
+the Unity editor at all.
 
-### Rung 1 — Reuse an existing asset (zero files, no editor)
+Think of the options as a ladder. Start at the lowest rung that solves your
+problem, because each rung up costs more effort.
 
-Point `PrefabSource` at an existing `STRUCTURE_TYPE` and inherit its visual, as
-Mass Grave does with `CRYPT`. Free. Use when an existing look is close enough.
+### Rung 1: reuse an existing look (no files, no editor)
 
-### Rung 2 — Loose PNG → `Sprite` at runtime (no editor)
+When you register a structure (Part 1), the `PrefabSource` field lets you point at
+an existing structure type and borrow its appearance. For example, setting it to
+`STRUCTURE_TYPE.CRYPT` makes your structure look like a Crypt. This costs nothing
+and is the right choice when an existing look is close enough to what you want.
 
-Ship plain `.png` files next to your DLL and build `Sprite`s at load time. The
-Unity editor never opens. This covers **icons, portraits, tile-object sprites,
-reskinned structures, and UI** — probably ~80% of what you'll want.
+### Rung 2: load a loose PNG at runtime (no editor)
+
+You can place ordinary `.png` image files next to your mod's DLL and turn them
+into game sprites while the game runs. The Unity editor is never involved. This
+one technique covers icons, portraits, tile-object images, reskinned structures,
+and user-interface graphics, which is the large majority of art a mod needs.
+
+Here is a complete helper that loads a PNG file into a usable sprite:
 
 ```csharp
 static Sprite LoadSprite(string path, float pixelsPerUnit = 64f) {
-    var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false) {
-        filterMode = FilterMode.Point           // crisp pixels; match the game's look
+    // Create an empty texture. Point filtering keeps pixel art crisp;
+    // use it to match Ruinarch's pixel look.
+    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) {
+        filterMode = FilterMode.Point
     };
-    tex.LoadImage(System.IO.File.ReadAllBytes(path));   // decodes PNG/JPG bytes
-    return Sprite.Create(
-        tex, new Rect(0, 0, tex.width, tex.height),
-        new Vector2(0.5f, 0.5f), pixelsPerUnit);        // pivot centre; match game PPU
-}
 
-// after a structure/tile-object spawns, swap what its SpriteRenderers show:
-var png = System.IO.Path.Combine(context.ModsRoot, "MyMod/art/mound.png");
-foreach (var sr in structureObj.GetComponentsInChildren<SpriteRenderer>())
-    sr.sprite = LoadSprite(png);
+    // Read the PNG (or JPG) bytes off disk and decode them into the texture.
+    texture.LoadImage(System.IO.File.ReadAllBytes(path));
+
+    // Wrap the whole texture in a sprite. The (0.5, 0.5) pivot centres it;
+    // pixelsPerUnit controls on-screen size and should match the game's value.
+    return Sprite.Create(
+        texture,
+        new Rect(0, 0, texture.width, texture.height),
+        new Vector2(0.5f, 0.5f),
+        pixelsPerUnit);
+}
 ```
 
-**Audio the same way:** the game's own sounds go through Wwise
-(`AkSoundEngine.PostEvent`), which would need a soundbank. Skip it — play a loose
-`.wav`/`.ogg` through a plain Unity `AudioSource` you create at runtime.
-
-### Rung 3 — New prefab via AssetBundle (needs the editor, tiny + additive)
-
-Only when you need a genuinely new **shape**: a different footprint, a custom
-tilemap layout, an animation, or a particle system. You build one small
-`.bundle` in Unity and load it at runtime:
+To change how something looks, assign your loaded sprite to the image components
+Unity uses to draw it (called `SpriteRenderer`s). For example, once a structure
+object exists in the world:
 
 ```csharp
-var bundlePath = System.IO.Path.Combine(context.ModsRoot, "MyMod/mymod.bundle");
-var bundle     = AssetBundle.LoadFromFile(bundlePath);
-var prefab     = bundle.LoadAsset<GameObject>("MassGraveMound");
-// then register that prefab as your structure's visual via ModContent
+// context is the ModContext your mod received in OnLoad; ModsRoot is the Mods/ path.
+string imagePath = System.IO.Path.Combine(context.ModsRoot, "YourMod/art/yourart.png");
+Sprite sprite = LoadSprite(imagePath);
+
+foreach (var renderer in structureObject.GetComponentsInChildren<SpriteRenderer>())
+    renderer.sprite = sprite;
 ```
 
-Still one additive file. It **never** replaces `Assembly-CSharp` or any game data.
+**Audio works the same way.** The game's built-in sounds use a specialised audio
+system (Wwise) that is awkward to extend. You can sidestep it entirely: load a
+loose `.wav` or `.ogg` file at runtime and play it through a standard Unity
+`AudioSource` component that your mod creates.
+
+### Rung 3: build a new prefab as an AssetBundle (editor required, small and additive)
+
+You only need this rung when you want a genuinely new **shape**: a structure with
+a different footprint, a custom tile layout, an animation, or a particle effect,
+none of which can be expressed as a single flat sprite.
+
+An **AssetBundle** is a single file that Unity produces containing your custom
+content. You build it once in the Unity editor, ship that one file inside your mod
+folder, and load it at runtime:
+
+```csharp
+string bundlePath = System.IO.Path.Combine(context.ModsRoot, "YourMod/yourmod.bundle");
+AssetBundle bundle = AssetBundle.LoadFromFile(bundlePath);
+GameObject prefab = bundle.LoadAsset<GameObject>("YourStructurePrefab");
+// You then use this prefab as your structure's visual through the framework.
+```
+
+It is still a single additive file. It never replaces the game's assembly or any
+game data.
 
 ---
 
-## What a *structure* prefab actually is
+## What a "structure" really is (important before you try Rung 3)
 
-A Ruinarch structure is **not** a free-floating model. It's a GameObject carrying
-the game's own `LocationStructureObject` MonoBehaviour, whose serialized fields
-are (from the decompiled source):
+A Ruinarch structure is **not** just an image. It is a Unity object (a
+"GameObject") that carries a game-specific component called
+`LocationStructureObject`. That component stores everything the game needs to
+place and run the structure, including:
 
-- `structureType` — the `STRUCTURE_TYPE` enum
-- ground / detail / wall **`Tilemap`s** + their `TilemapRenderer`s
-- `_size`, `_center`, `_predeterminedOccupiedCoordinates`, `_borderCoordinates`
-  — the footprint
-- wall types (`_blockWallType`, `_thinWallResource`)
-- `StructureConnector[]`, `RoomTemplate[]`, a click collider
+- `structureType`: which structure type this is
+- ground, detail, and wall **tilemaps** plus the renderers that draw them (a
+  tilemap is Unity's grid-of-tiles system, which Ruinarch uses to paint floors
+  and walls)
+- the **footprint**: its size, its centre point, which tile coordinates it
+  occupies, and its border tiles
+- wall types, connector points (where doors/entrances attach), room templates,
+  and a click collider (so the player can select it)
 
-So the "asset" is a **tilemap-driven prefab with a game-code component**. That
-shapes the three ways to author one:
+In other words, the "asset" for a structure is a tilemap-based object with a
+game component, not a lone picture. That is why there are three practical ways to
+create one, from most effort to least.
 
-### Path A — Full editor project referencing the game DLLs (the proper way)
+### Approach A: a Unity project that references the game's files (full control)
 
-Copy the game's `Assembly-CSharp.dll` + the Unity module DLLs into a **Unity
-2020.3.20f1** project. Now `LocationStructureObject`, `STRUCTURE_TYPE`, the
-tilemaps, etc. exist in the editor and you build the prefab exactly like the devs
-did — add the component, paint tilemaps, set the footprint coordinates, mark it
-into an AssetBundle, build. Most work, most freedom (genuinely new footprint).
-Keep the `Assembly-CSharp` reference **out** of the shipped bundle — bundles bind
-to the game's copy at load time, they don't embed it.
+Copy the game's `Assembly-CSharp.dll` and Unity's own module DLLs into a Unity
+project set to **exactly version 2020.3.20f1**. With those references in place,
+the `LocationStructureObject` component and the structure-type list exist inside
+your editor, so you can build a structure prefab the same way the game's
+developers did: add the component, paint the tilemaps, set the footprint
+coordinates, and export it as an AssetBundle. This gives you the most freedom,
+including brand new footprints. Do not include the game's `Assembly-CSharp.dll`
+inside the exported bundle; the bundle links to the game's own copy when it loads.
 
-### Path B — Pure-visual prefab + wire the component in code (lighter editor)
+### Approach B: build only the visuals, then attach the component in code
 
-Build only the visual hierarchy (sprites, a simple GameObject) in a **clean**
-editor project with **no** game DLLs → bundle it. At runtime,
-`AddComponent<LocationStructureObject>()` and set its serialized fields (via
-reflection, cloning values from an existing template). Editor stays clean; you
-pay in runtime wiring code. Good for simple single-sprite footprints.
+Build just the visual part (the images and the object hierarchy) in a **clean**
+Unity project that has **no** game references, and export it as a bundle. Then, at
+runtime, your mod adds the `LocationStructureObject` component in code and fills in
+its values (copying them from an existing structure as a template). Your editor
+project stays simple, at the cost of more setup code in your mod. This suits
+simple structures with a single-image footprint.
 
-### Path C — Clone-and-reskin (the pragmatic sweet spot)
+### Approach C: copy an existing structure and change only its look (least effort)
 
-Clone an existing structure prefab at runtime — you inherit a *valid*
-`LocationStructureObject` with correct tilemaps, coordinates, connectors, and
-walls — then swap **only the sprites/tiles** with Rung-2 loose PNGs or a
-sprite-only bundle. New look, proven machinery, minimal editor. This is what
-"Mass Grave with its own mound sprite" would be.
+At runtime, duplicate an existing structure object. Because you copied a real one,
+it already has a correct `LocationStructureObject`, with valid tilemaps,
+footprint, and connectors. Then swap only its images, using the Rung 2 loose-PNG
+technique (or a bundle that contains only images). You get a new appearance on
+proven, working machinery with little or no editor work.
 
-**Rule of thumb:** new *shape* → Path A. New *look* on existing machinery →
-Path C (little/no editor).
-
----
-
-## AssetBundle gotchas (the ones that actually bite)
-
-- **Unity version must be exactly 2020.3.20f1.** A bundle built in a different
-  minor version can fail to load or mis-serialize. Match the game.
-- **Shaders:** use Unity's built-in **Sprites/Default** (or the game's sprite
-  shader) inside the bundle — not a URP/HDRP shader — or your sprites render
-  bright pink (missing shader) under the game's pipeline.
-- **Sorting layers + pixels-per-unit** must match the game's, or your object
-  floats above/below the map or is the wrong scale.
-- **Tilemaps need `Tile` assets**, not just PNGs — that's genuine editor
-  authoring, and only matters for Path A / novel footprints.
-- **Bundles are additive.** Ship the `.bundle` in your mod folder and load it
-  with `AssetBundle.LoadFromFile`; never put it inside the game's `*_Data`.
+**Rule of thumb:** if you need a new **shape**, use Approach A. If you only need a
+new **look** on an existing structure, use Approach C.
 
 ---
 
-## Licensing / redistribution
+## AssetBundle pitfalls (the ones that commonly cause problems)
 
-You never redistribute the game's assets. Loose PNGs are art **you** make; an
-AssetBundle contains **only your** content; reusing an existing prefab happens at
-runtime on the player's own legally-installed copy — nothing of theirs is
-shipped. That's the same clean footing every mod for a paid Unity game stands on.
+- **Match the Unity version exactly: 2020.3.20f1.** A bundle built in a different
+  version can fail to load or read its data incorrectly.
+- **Use a compatible shader.** Inside the bundle, use Unity's built-in
+  `Sprites/Default` shader (or the game's sprite shader). If you use a shader from
+  a different render pipeline, your art shows up as solid bright pink, which means
+  "missing shader".
+- **Match sorting and scale.** Your object's sorting layer and its
+  pixels-per-unit must match the game's, or it will draw in front of or behind the
+  map, or appear at the wrong size.
+- **Tilemaps need `Tile` assets, not just PNGs.** Painting tilemaps is genuine
+  editor work, and it only matters for Approach A / new footprints.
+- **Keep bundles additive.** Ship the `.bundle` inside your mod's folder and load
+  it with `AssetBundle.LoadFromFile`. Never place it inside the game's data
+  folders.
+
+---
+
+## Licensing and redistribution
+
+You never redistribute the game's own assets. Loose PNGs are images you created;
+an AssetBundle contains only your content; and reusing an existing structure's
+look happens at runtime on the player's own installed copy of the game, so nothing
+belonging to the game is shipped by your mod. This is the standard, clean basis on
+which mods for paid Unity games are distributed.
 
 ---
 
 ## Quick decision guide
 
-| You want to add… | Use | Editor? |
+| What you want to add | What to use | Editor needed? |
 |---|---|---|
-| A behaviour/rule change | plain Harmony patch | no |
-| A new structure/skill (logic + identity) | `Ruinarch.ModContent` (Part 1) | no |
-| A new icon / portrait / UI sprite | Rung 2 (loose PNG) | no |
-| A reskin of an existing structure | Rung 2 or Path C | no (or tiny) |
-| A new sound | loose `.wav`/`.ogg` + `AudioSource` | no |
-| A genuinely new structure *shape/footprint* | Rung 3 + Path A | **yes** (2020.3.20f1) |
+| A change to existing behaviour or a rule | An ordinary Harmony patch | No |
+| A new structure or skill (new logic + identity) | The content framework (Part 1) | No |
+| A new icon, portrait, or interface image | Rung 2, a loose PNG | No |
+| A new look for an existing structure | Rung 2, or Approach C | No, or very little |
+| A new sound | A loose `.wav` / `.ogg` played via `AudioSource` | No |
+| A new structure with a brand new shape | Rung 3 with Approach A | Yes (version 2020.3.20f1) |

@@ -105,7 +105,8 @@ is present in the `Mods/` root. Launch the game to load it; watch `mods.log`.
 
 ## Adding new content (structures, skills, art)
 
-Harmony changes *existing* behaviour. To add genuinely **new** content — a new
-`STRUCTURE_TYPE`, a new build skill, new sprites/sounds, or an AssetBundle prefab
-— see [`ASSETS_AND_CONTENT.md`](ASSETS_AND_CONTENT.md). It covers the
-`Ruinarch.ModContent` framework and the loose-PNG → AssetBundle asset ladder.
+Harmony changes behaviour that already exists. To add genuinely **new** content
+(a new `STRUCTURE_TYPE`, a new build skill, or new sprites, sounds, and
+AssetBundle prefabs), see [`ASSETS_AND_CONTENT.md`](ASSETS_AND_CONTENT.md). It
+covers the `Ruinarch.ModContent` framework and the loose-PNG to AssetBundle
+asset ladder.
