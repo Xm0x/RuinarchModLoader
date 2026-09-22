@@ -25,6 +25,7 @@ namespace Ruinarch.Modding.Patcher
 		public const string LoaderMethod = "Initialize";
 		public const string Harmony = "0Harmony.dll";
 		public const string ContentFramework = "Ruinarch.ModContent.dll";
+		public const string ModMenu = "Ruinarch.ModMenu.dll";
 
 		/// <summary>
 		/// Resolve the Managed/ directory that holds Assembly-CSharp.dll from a
@@ -146,6 +147,15 @@ namespace Ruinarch.Modding.Patcher
 				{
 					log($"Note: {ContentFramework} not bundled; content mods that add new " +
 						"structures/skills need it dropped into Mods/.");
+				}
+
+				// The built-in mod menu ships in Mods/ like Harmony. Also optional:
+				// without it the game's stock Steam Workshop Mods window is unchanged.
+				string menuSrc = FindNextTo(ModMenu, loaderSrcDirs);
+				if (menuSrc != null)
+				{
+					File.Copy(menuSrc, Path.Combine(modsDir, ModMenu), overwrite: true);
+					log($"Installed {ModMenu} -> Mods/");
 				}
 
 				// 3) Always read from the pristine backup and write the live dll, so

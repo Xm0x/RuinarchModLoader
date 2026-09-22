@@ -27,7 +27,7 @@ for rid in linux-x64 win-x64; do
 		-p:DebugType=none \
 		-o "$dest" >/dev/null
 	rm -f "$dest"/*.pdb "$dest"/*.runtimeconfig.json
-	cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$dest"/
+	cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll" "$dest"/
 	exe=$(find "$dest" -maxdepth 1 -name 'RuinarchModLoader.Installer*' ! -name '*.dll' | head -1)
 	echo "    -> $exe ($(du -h "$exe" | cut -f1))"
 done

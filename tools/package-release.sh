@@ -23,6 +23,7 @@ cp "$MOD_BUILD_DIR"/patcher/Mono.Cecil*.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.Modding.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/0Harmony.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModContent.dll "$dist/"
+cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModMenu.dll "$dist/"
 
 # Docs + example source
 cp "$MOD_PROJECT_DIR/README.md" "$dist/"

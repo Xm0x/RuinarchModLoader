@@ -36,6 +36,9 @@ echo "OK -> build/Ruinarch.Modding.dll"
 # --- Content framework: references the game DLL + Harmony (unlike the loader) ---
 "$MOD_PROJECT_DIR/tools/build-framework.sh"
 
+# --- Built-in mod menu: references the game DLL + Harmony + the loader API ---
+"$MOD_PROJECT_DIR/tools/build-modmenu.sh"
+
 # --- Patcher: normal SDK build ---
 dotnet build "$MOD_PROJECT_DIR/src/Patcher/Patcher.csproj" -c Release -o "$MOD_BUILD_DIR/patcher" -v quiet
 echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
@@ -44,4 +47,5 @@ echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
 cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_LIB_DIR/0Harmony.dll"           "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/patcher/"
-echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll)"
+cp "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll"    "$MOD_BUILD_DIR/patcher/"
+echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll + Ruinarch.ModContent.dll + Ruinarch.ModMenu.dll)"

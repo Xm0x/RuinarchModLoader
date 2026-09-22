@@ -19,6 +19,28 @@ namespace Ruinarch.Modding
 	}
 
 	/// <summary>
+	/// Every mod the loader discovered on disk this session, whether or not it was
+	/// activated. Drives the in-game mod list / manager UI. A mod is "known" if it
+	/// exposes an <see cref="IRuinarchMod"/> entry point or declares itself with a
+	/// <c>mod.json</c>; plain dependency DLLs (0Harmony, resource assemblies) are
+	/// not listed.
+	/// </summary>
+	public sealed class KnownMod
+	{
+		public ModInfo Info { get; internal set; }
+		public string Directory { get; internal set; }
+		public string DllPath { get; internal set; }
+
+		/// <summary>Whether the mod is enabled in <c>modloader.config.json</c>.</summary>
+		public bool Enabled { get; internal set; }
+
+		/// <summary>Whether the mod's <see cref="IRuinarchMod.OnLoad"/> actually ran this session.</summary>
+		public bool Loaded { get; internal set; }
+
+		public string Id => Info != null ? Info.id : null;
+	}
+
+	/// <summary>
 	/// The mod loader. <see cref="Initialize"/> is the single entry point; the
 	/// patcher wires a call to it into the game's <c>Assembly-CSharp</c> module
 	/// initializer, so it runs the instant Mono loads the game assembly, before
@@ -34,6 +56,8 @@ namespace Ruinarch.Modding
 	public static class ModLoader
 	{
 		private static readonly List<LoadedMod> _loaded = new List<LoadedMod>();
+		private static readonly List<KnownMod> _known = new List<KnownMod>();
+		private static HashSet<string> _disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		private static bool _initialized;
 
 		/// <summary>Absolute path to the <c>Mods/</c> root (set during init).</summary>
@@ -42,8 +66,18 @@ namespace Ruinarch.Modding
 		/// <summary>Shared log file all mods append to.</summary>
 		public static string LogFile { get; private set; }
 
+		/// <summary>Absolute path to the loader config (<c>modloader.config.json</c>).</summary>
+		public static string ConfigFile { get; private set; }
+
 		/// <summary>Every mod that loaded successfully, in load order.</summary>
 		public static IReadOnlyList<LoadedMod> Loaded => _loaded;
+
+		/// <summary>
+		/// Every mod discovered this session, activated or not (drives the mod
+		/// manager UI). Disabled mods appear here with <see cref="KnownMod.Loaded"/>
+		/// false.
+		/// </summary>
+		public static IReadOnlyList<KnownMod> Known => _known;
 
 		/// <summary>
 		/// Entry point. Called from the patched game assembly's module initializer.
@@ -62,7 +96,10 @@ namespace Ruinarch.Modding
 				ModsRoot = ResolveModsRoot();
 				System.IO.Directory.CreateDirectory(ModsRoot);
 				LogFile = Path.Combine(ModsRoot, "mods.log");
+				ConfigFile = Path.Combine(ModsRoot, "modloader.config.json");
 				TruncateLog();
+
+				_disabled = ReadDisabledSet();
 
 				// Let mods resolve their own dependencies from anywhere under Mods/.
 				AppDomain.CurrentDomain.AssemblyResolve += ResolveFromMods;
@@ -73,7 +110,7 @@ namespace Ruinarch.Modding
 				{
 					TryLoad(dll);
 				}
-				Debug.Log($"[ModLoader] Done. {_loaded.Count} mod(s) loaded.");
+				Debug.Log($"[ModLoader] Done. {_loaded.Count} of {_known.Count} discovered mod(s) active.");
 			}
 			catch (Exception e)
 			{
@@ -120,6 +157,23 @@ namespace Ruinarch.Modding
 		private static void TryLoad(string dllPath)
 		{
 			string fileName = Path.GetFileNameWithoutExtension(dllPath);
+			string dir = Path.GetDirectoryName(dllPath);
+			string jsonPath = Path.Combine(dir ?? ModsRoot, "mod.json");
+			bool hasJson = File.Exists(jsonPath);
+
+			// Fast path: a mod that ships a mod.json can be identified and skipped
+			// WITHOUT loading its assembly at all when it is disabled.
+			if (hasJson)
+			{
+				ModInfo declared = ModInfo.LoadOrDefault(jsonPath, fileName);
+				if (_disabled.Contains(declared.id))
+				{
+					RecordKnown(declared, dir, dllPath, enabled: false, loaded: false);
+					Debug.Log($"[ModLoader] Skipped disabled mod '{declared.id}' (not loaded).");
+					return;
+				}
+			}
+
 			Assembly assembly;
 			try
 			{
@@ -147,11 +201,18 @@ namespace Ruinarch.Modding
 				return;
 			}
 
+			ModInfo info = ModInfo.LoadOrDefault(jsonPath, fileName);
+
+			// A mod with no mod.json still honors the disabled list by its fallback id.
+			if (_disabled.Contains(info.id))
+			{
+				RecordKnown(info, dir, dllPath, enabled: false, loaded: false);
+				Debug.Log($"[ModLoader] Discovered disabled mod '{info.id}'; OnLoad skipped.");
+				return;
+			}
+
 			try
 			{
-				string dir = Path.GetDirectoryName(dllPath);
-				string jsonPath = Path.Combine(dir ?? ModsRoot, "mod.json");
-				ModInfo info = ModInfo.LoadOrDefault(jsonPath, fileName);
 				var logger = new ModLogger(info.id, LogFile);
 				var context = new ModContext(info, dir, ModsRoot, logger);
 
@@ -165,11 +226,116 @@ namespace Ruinarch.Modding
 					Instance = instance,
 					Directory = dir
 				});
+				RecordKnown(info, dir, dllPath, enabled: true, loaded: true);
 				Debug.Log($"[ModLoader] Loaded {info}");
 			}
 			catch (Exception e)
 			{
+				RecordKnown(info, dir, dllPath, enabled: true, loaded: false);
 				Debug.LogError($"[ModLoader] Mod '{fileName}' failed in OnLoad and was skipped: {e}");
+			}
+		}
+
+		private static void RecordKnown(ModInfo info, string dir, string dllPath, bool enabled, bool loaded)
+		{
+			KnownMod existing = _known.FirstOrDefault(k => k.Id == info.id);
+			if (existing != null)
+			{
+				existing.Loaded |= loaded;
+				return;
+			}
+			_known.Add(new KnownMod
+			{
+				Info = info,
+				Directory = dir,
+				DllPath = dllPath,
+				Enabled = enabled,
+				Loaded = loaded
+			});
+		}
+
+		/// <summary>
+		/// Enable or disable a mod by id. Rewrites <c>modloader.config.json</c> and
+		/// updates the in-memory <see cref="Known"/> state so a UI reflects it
+		/// immediately. The change to what actually loads takes effect on the next
+		/// game launch, because mods are loaded once at startup.
+		/// </summary>
+		public static void SetModEnabled(string id, bool enabled)
+		{
+			if (string.IsNullOrEmpty(id))
+			{
+				return;
+			}
+			if (enabled)
+			{
+				_disabled.Remove(id);
+			}
+			else
+			{
+				_disabled.Add(id);
+			}
+			WriteDisabledSet();
+
+			KnownMod km = _known.FirstOrDefault(k => k.Id == id);
+			if (km != null)
+			{
+				km.Enabled = enabled;
+			}
+		}
+
+		/// <summary>Whether a mod id is currently enabled (not in the disabled list).</summary>
+		public static bool IsEnabled(string id)
+		{
+			return !string.IsNullOrEmpty(id) && !_disabled.Contains(id);
+		}
+
+		[Serializable]
+		private class LoaderConfig
+		{
+			public string[] disabled = Array.Empty<string>();
+		}
+
+		private static HashSet<string> ReadDisabledSet()
+		{
+			var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			try
+			{
+				if (!string.IsNullOrEmpty(ConfigFile) && File.Exists(ConfigFile))
+				{
+					LoaderConfig cfg = JsonUtility.FromJson<LoaderConfig>(File.ReadAllText(ConfigFile));
+					if (cfg?.disabled != null)
+					{
+						foreach (string id in cfg.disabled)
+						{
+							if (!string.IsNullOrEmpty(id))
+							{
+								set.Add(id);
+							}
+						}
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Debug.LogWarning($"[ModLoader] Bad {Path.GetFileName(ConfigFile)}: {e.Message}");
+			}
+			return set;
+		}
+
+		private static void WriteDisabledSet()
+		{
+			try
+			{
+				if (string.IsNullOrEmpty(ConfigFile))
+				{
+					return;
+				}
+				var cfg = new LoaderConfig { disabled = _disabled.ToArray() };
+				File.WriteAllText(ConfigFile, JsonUtility.ToJson(cfg, prettyPrint: true));
+			}
+			catch (Exception e)
+			{
+				Debug.LogError($"[ModLoader] Could not write {Path.GetFileName(ConfigFile)}: {e.Message}");
 			}
 		}
 
