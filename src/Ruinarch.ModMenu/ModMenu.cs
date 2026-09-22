@@ -131,7 +131,7 @@ namespace Ruinarch.ModMenu
 			_panel = NewUI("RuinarchModMenu", windowGO.transform);
 			Stretch(_panel);
 			var bg = _panel.AddComponent<Image>();
-			bg.color = new Color(0.05f, 0.06f, 0.09f, 0.97f);
+			bg.color = new Color(0.05f, 0.06f, 0.09f, 1f);
 
 			var root = _panel.AddComponent<VerticalLayoutGroup>();
 			root.padding = new RectOffset(28, 28, 22, 22);
@@ -183,8 +183,11 @@ namespace Ruinarch.ModMenu
 			frow.childControlWidth = true;
 			frow.childControlHeight = true;
 			frow.childForceExpandWidth = true;
+			frow.childForceExpandHeight = false;
 			var frowLe = footer.AddComponent<LayoutElement>();
-			frowLe.minHeight = 46;
+			frowLe.minHeight = 38;
+			frowLe.preferredHeight = 38;
+			frowLe.flexibleHeight = 0f;
 
 			Button(footer.transform, "Refresh", () => { RefreshList(); RefreshLog(); });
 			Button(footer.transform, "Open Mods folder", OpenModsFolder);
@@ -384,10 +387,12 @@ namespace Ruinarch.ModMenu
 			var btn = go.AddComponent<Button>();
 			btn.targetGraphic = img;
 			var le = go.AddComponent<LayoutElement>();
-			le.minHeight = 42;
-			le.minWidth = 120;
+			le.minHeight = 34;
+			le.preferredHeight = 34;
+			le.flexibleHeight = 0f;
+			le.minWidth = 100;
 
-			var lbl = Label(go.transform, label, 20, TextAlignmentOptions.Center, FontStyles.Normal);
+			var lbl = Label(go.transform, label, 16, TextAlignmentOptions.Center, FontStyles.Normal);
 			Stretch(lbl.gameObject);
 
 			if (onClick != null)
