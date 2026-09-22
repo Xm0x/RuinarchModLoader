@@ -102,3 +102,10 @@ tools/build-mod.sh path/to/MyMod  "/path/to/Ruinarch/Mods"
 It references every game assembly plus the modding API and Harmony, compiles your
 `.cs` files into `MyMod.dll`, copies your `mod.json`, and ensures `0Harmony.dll`
 is present in the `Mods/` root. Launch the game to load it; watch `mods.log`.
+
+## Adding new content (structures, skills, art)
+
+Harmony changes *existing* behaviour. To add genuinely **new** content — a new
+`STRUCTURE_TYPE`, a new build skill, new sprites/sounds, or an AssetBundle prefab
+— see [`ASSETS_AND_CONTENT.md`](ASSETS_AND_CONTENT.md). It covers the
+`Ruinarch.ModContent` framework and the loose-PNG → AssetBundle asset ladder.
