@@ -42,6 +42,14 @@ dotnet "$CSC" "@$rsp" || { echo "mod build FAILED" >&2; rm -f "$rsp"; exit 1; }
 rm -f "$rsp"
 
 [ -f "$src/mod.json" ] && cp "$src/mod.json" "$outdir/"
+# Deploy the mod's loose assets (art, audio, bundles) next to its DLL so a mod can
+# ship PNGs/WAVs/AssetBundles and resolve them at runtime under its own folder.
+for assetdir in art audio bundles; do
+  if [ -d "$src/$assetdir" ]; then
+    rm -rf "${outdir:?}/$assetdir"
+    cp -r "$src/$assetdir" "$outdir/$assetdir"
+  fi
+done
 # Ensure Harmony is present in the Mods root so the loader resolves it.
 cp "$MOD_LIB_DIR/0Harmony.dll" "$target/0Harmony.dll"
 # Ensure the content framework is present in the Mods root so mods that add new
