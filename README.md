@@ -17,11 +17,11 @@ scene, and scans `Mods/` for mod DLLs.
 
 - The patcher backs up your original as `Assembly-CSharp.dll.orig`, so uninstall
   is a clean revert.
-- Verified working on the stock Steam build under Proton/Wine and Mono.
+- Runs on the stock Steam build under Proton/Wine and Mono.
 
 ## Install (players)
 
-### Easy way: the installer app (recommended)
+### The installer app
 
 A small graphical installer does everything for you. It bundles the .NET
 runtime, so there is nothing else to install.
@@ -40,27 +40,6 @@ runtime, so there is nothing else to install.
 
 > After a game update Steam replaces `Assembly-CSharp.dll`; just open the
 > installer again and click **Reinstall**.
-
-### Command line (advanced)
-
-The release also ships a CLI patcher (this one needs the .NET 8 runtime). With
-no `--game`, it scans your Steam libraries automatically.
-
-```bash
-# Linux
-dotnet RuinarchModLoader.Patcher.dll --game "/path/to/Ruinarch"
-```
-```bat
-REM Windows
-RuinarchModLoader.Patcher.exe --game "C:\Program Files (x86)\Steam\steamapps\common\Ruinarch"
-```
-
-Find the folder in Steam: right-click Ruinarch, Manage, Browse local files.
-Check `Mods/mods.log` to see what loaded. Uninstall reverts cleanly:
-
-```bash
-dotnet RuinarchModLoader.Patcher.dll --game "/path/to/Ruinarch" --uninstall
-```
 
 ## Writing a mod
 
@@ -101,6 +80,8 @@ Ship an optional `mod.json` next to your DLL:
 The full API and patterns are in [`docs/WRITING_MODS.md`](docs/WRITING_MODS.md).
 Adding **new content** (new structures and skills, sprites, sounds, and
 AssetBundles) is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
+The content-injection framework that backs new structures and skills has its own
+specification in [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
 
 ### Build a mod
 
@@ -130,5 +111,5 @@ game's Unity DLLs at build time.
 
 ## License
 
-MIT (our code). See [LICENSE](LICENSE). Ruinarch and its assets belong to their
+MIT (this project's code). See [LICENSE](LICENSE). Ruinarch and its assets belong to their
 respective owners; this project is not affiliated with or endorsed by them.
