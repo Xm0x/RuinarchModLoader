@@ -1,4 +1,5 @@
 # RuinarchModLoader
+DISCLAIMER: For %100 honesty, help of AI was used in this project.
 
 A first-class mod loader for **Ruinarch**, with [Harmony](https://github.com/pardeike/Harmony)
 runtime patching built in. Install it into your own copy of the game, drop mods
