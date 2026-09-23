@@ -33,16 +33,30 @@ namespace Ruinarch.ModContent
 				return;
 			}
 			_installed = true;
-			try
+			_harmony = new Harmony(HarmonyId);
+			// Patch class by class: with PatchAll, one unresolvable target aborts every patch
+			// after it and leaves the framework half-installed. Isolated, a bad patch only
+			// disables itself and is named in the log.
+			int ok = 0;
+			int failed = 0;
+			foreach (Type t in AccessTools.GetTypesFromAssembly(typeof(ModContent).Assembly))
 			{
-				_harmony = new Harmony(HarmonyId);
-				_harmony.PatchAll(typeof(ModContent).Assembly);
-				Debug.Log("[ModContent] Content framework installed (patches applied).");
+				if (t.GetCustomAttributes(typeof(HarmonyPatch), inherit: false).Length == 0)
+				{
+					continue;
+				}
+				try
+				{
+					_harmony.CreateClassProcessor(t).Patch();
+					ok++;
+				}
+				catch (Exception e)
+				{
+					failed++;
+					Debug.LogError("[ModContent] Patch " + t.Name + " failed: " + e.Message);
+				}
 			}
-			catch (Exception e)
-			{
-				Debug.LogError("[ModContent] Install failed: " + e);
-			}
+			Debug.Log(string.Format("[ModContent] Content framework installed ({0} patch(es) applied, {1} failed).", ok, failed));
 		}
 
 		/// <summary>

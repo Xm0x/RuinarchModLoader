@@ -28,6 +28,14 @@ namespace Ruinarch.ModContent
 			{
 				return null;
 			}
+			// Mods load inside the game assembly's module initializer, before the graphics
+			// device exists; a Texture2D created there crashes the player natively. Refuse
+			// until the engine has rendered a frame (call from gameplay, not from OnLoad).
+			if (Time.frameCount < 1)
+			{
+				Debug.LogWarning("[ModArt] LoadSprite called before the first frame (e.g. from OnLoad); load art lazily in-game instead: " + absolutePath);
+				return null;
+			}
 			Vector2 p = pivot ?? new Vector2(0.5f, 0.5f);
 			string key = absolutePath + "|" + pixelsPerUnit.ToString("R") + "|" + p.x + "," + p.y;
 			if (_cache.TryGetValue(key, out Sprite cached))

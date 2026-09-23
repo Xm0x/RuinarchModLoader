@@ -55,8 +55,9 @@ namespace Ruinarch.ModContent
 		/// </summary>
 		public PLAYER_SKILL_TYPE UnlockWith = PLAYER_SKILL_TYPE.NONE;
 
-		/// <summary>Classification flags mirrored into the game's <c>Extensions</c> switches.</summary>
-		public bool IsDemonic = true;
+		/// <summary>Classification flags mirrored into the game's <c>Extensions</c> switches.
+		/// A demonic (player-built) structure is <c>IsPlayerStructure</c>; the game has no
+		/// separate demonic switch.</summary>
 		public bool IsPlayerStructure = true;
 		public bool IsSpecialStructure = false;
 		public bool IsVillageStructure = false;

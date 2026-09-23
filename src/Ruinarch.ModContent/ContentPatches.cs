@@ -75,6 +75,21 @@ namespace Ruinarch.ModContent
 		}
 	}
 
+	/// <summary>Blueprint placement asks the structure data for prefabs keyed by the full
+	/// StructureSetting (type + resource). A registered type has no entry of its own, so look
+	/// up the PrefabSource's prefabs for the same resource instead.</summary>
+	[HarmonyPatch(typeof(StructureData), nameof(StructureData.GetStructurePrefabs), new Type[] { typeof(FACTION_TYPE), typeof(StructureSetting) })]
+	internal static class Patch_GetStructurePrefabs
+	{
+		private static void Prefix(ref StructureSetting p_structureSetting)
+		{
+			if (ContentRegistry.StructuresByType.TryGetValue((int)p_structureSetting.structureType, out StructureRegistration reg))
+			{
+				p_structureSetting = new StructureSetting(reg.PrefabSource, p_structureSetting.resource);
+			}
+		}
+	}
+
 	/// <summary>Inject registered build-skill data into the demonic-structure skill dict.
 	/// Runs once, right after the game builds the dict from its fixed array - we never grow
 	/// the fixed array (that drove the UnlockStructureUIController crash), we add straight to
@@ -96,33 +111,8 @@ namespace Ruinarch.ModContent
 		}
 	}
 
-	/// <summary>The game gates some paths on the fixed skill array via HasDemonicStructureSkill;
-	/// report true for registered virtual skills.</summary>
-	[HarmonyPatch(typeof(PlayerSkillManager), "HasDemonicStructureSkill")]
-	internal static class Patch_HasDemonicStructureSkill
-	{
-		private static void Postfix(PLAYER_SKILL_TYPE __0, ref bool __result)
-		{
-			if (ContentRegistry.StructuresBySkill.ContainsKey((int)__0))
-			{
-				__result = true;
-			}
-		}
-	}
-
-	/// <summary>Classification: make registered types answer the game's Extensions switches.</summary>
-	[HarmonyPatch(typeof(Extensions), "IsDemonicStructure", new Type[] { typeof(STRUCTURE_TYPE) })]
-	internal static class Patch_IsDemonicStructure
-	{
-		private static void Postfix(STRUCTURE_TYPE __0, ref bool __result)
-		{
-			if (ContentRegistry.StructuresByType.TryGetValue((int)__0, out StructureRegistration reg) && reg.IsDemonic)
-			{
-				__result = true;
-			}
-		}
-	}
-
+	/// <summary>Classification: make registered types answer the game's Extensions switches.
+	/// (The game has no separate "demonic" switch: demonic structures are IsPlayerStructure.)</summary>
 	[HarmonyPatch(typeof(Extensions), "IsPlayerStructure", new Type[] { typeof(STRUCTURE_TYPE) })]
 	internal static class Patch_IsPlayerStructure
 	{
@@ -156,6 +146,73 @@ namespace Ruinarch.ModContent
 			{
 				__result = true;
 			}
+		}
+	}
+
+	// ---- Names -------------------------------------------------------------------------
+	// The game names structure types through raw dictionary lookups
+	// (StringEnumLookUp._structureTypeStrings[type]); a virtual type is not in them, so every
+	// log line, job description or UI panel that names a registered structure would throw
+	// KeyNotFoundException. Answer with the registration's DisplayName instead.
+
+	internal static class StructureNames
+	{
+		internal static bool TryGet(STRUCTURE_TYPE type, out string displayName)
+		{
+			if (ContentRegistry.StructuresByType.TryGetValue((int)type, out StructureRegistration reg))
+			{
+				displayName = string.IsNullOrEmpty(reg.DisplayName) ? reg.Id : reg.DisplayName;
+				return true;
+			}
+			displayName = null;
+			return false;
+		}
+	}
+
+	/// <summary>Enum-style key, e.g. "Mass Grave" -> "MASS_GRAVE".</summary>
+	[HarmonyPatch(typeof(StringEnumLookUp), nameof(StringEnumLookUp.ToStringEnum), new Type[] { typeof(STRUCTURE_TYPE) })]
+	internal static class Patch_StructureToStringEnum
+	{
+		private static bool Prefix(STRUCTURE_TYPE p_type, ref string __result)
+		{
+			if (!StructureNames.TryGet(p_type, out string name))
+			{
+				return true;
+			}
+			__result = name.Replace(' ', '_').ToUpperInvariant();
+			return false;
+		}
+	}
+
+	/// <summary>Display form, e.g. "Mass Grave". (The vanilla class lookup that strips the
+	/// spaces from this resolves to nothing in Assembly-CSharp, which is the safe outcome;
+	/// the factory prefixes above build registered types before that lookup runs.)</summary>
+	[HarmonyPatch(typeof(StringEnumLookUp), nameof(StringEnumLookUp.ToStringEnumWithSpace), new Type[] { typeof(STRUCTURE_TYPE) })]
+	internal static class Patch_StructureToStringEnumWithSpace
+	{
+		private static bool Prefix(STRUCTURE_TYPE p_type, ref string __result)
+		{
+			if (!StructureNames.TryGet(p_type, out string name))
+			{
+				return true;
+			}
+			__result = name;
+			return false;
+		}
+	}
+
+	/// <summary>Localized name: the game's table has no entry for a registered type.</summary>
+	[HarmonyPatch(typeof(Extensions), nameof(Extensions.LocalizedStructureName), new Type[] { typeof(STRUCTURE_TYPE) })]
+	internal static class Patch_LocalizedStructureName
+	{
+		private static bool Prefix(STRUCTURE_TYPE structureType, ref string __result)
+		{
+			if (!StructureNames.TryGet(structureType, out string name))
+			{
+				return true;
+			}
+			__result = name;
+			return false;
 		}
 	}
 
