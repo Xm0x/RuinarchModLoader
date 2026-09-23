@@ -294,16 +294,6 @@ new **look** on an existing structure, use Approach C.
 
 ---
 
-## Licensing and redistribution
-
-You never redistribute the game's own assets. Loose PNGs are images you created;
-an AssetBundle contains only your content; and reusing an existing structure's
-look happens at runtime on the player's own installed copy of the game, so nothing
-belonging to the game is shipped by your mod. This is the standard, clean basis on
-which mods for paid Unity games are distributed.
-
----
-
 ## Quick decision guide
 
 | What you want to add | What to use | Editor needed? |
