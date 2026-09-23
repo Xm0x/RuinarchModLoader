@@ -126,14 +126,38 @@ namespace Ruinarch.Modding
 			return Path.Combine(gameRoot, "Mods");
 		}
 
+		// Start a fresh mods.log. The previous launch's log is kept as
+		// Mods/logs/mods-<date>_<time>.log (the time it was last written), newest 20 only.
 		private static void TruncateLog()
 		{
+			try
+			{
+				KeepDatedCopy(LogFile, Path.Combine(ModsRoot, "logs"), "mods", 20);
+			}
+			catch
+			{
+			}
 			try
 			{
 				File.WriteAllText(LogFile, $"# Ruinarch mod log - {DateTime.Now}{Environment.NewLine}");
 			}
 			catch
 			{
+			}
+		}
+
+		private static void KeepDatedCopy(string file, string dir, string name, int keep)
+		{
+			if (!File.Exists(file))
+			{
+				return;
+			}
+			System.IO.Directory.CreateDirectory(dir);
+			string target = Path.Combine(dir, $"{name}-{File.GetLastWriteTime(file):yyyy-MM-dd_HH-mm-ss}.log");
+			File.Copy(file, target, overwrite: true);
+			foreach (string old in System.IO.Directory.GetFiles(dir, name + "-*.log").OrderByDescending(f => f, StringComparer.Ordinal).Skip(keep))
+			{
+				File.Delete(old);
 			}
 		}
 

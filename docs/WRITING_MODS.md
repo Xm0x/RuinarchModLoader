@@ -56,6 +56,10 @@ shipped game switches Unity logging off once it starts initializing the world
 (`WorldConfigManager.Awake`), so anything logged during play, including a plain
 `Debug.Log`, never reaches `Player.log`.
 
+`mods.log` starts fresh at every launch. The previous launch's log is kept in
+`Mods/logs/mods-<date>_<time>.log` (named by when it was last written); the newest 20
+are kept.
+
 ## Patching the game with Harmony
 
 `0Harmony.dll` is installed into `Mods/` and resolved for every mod. Create a
