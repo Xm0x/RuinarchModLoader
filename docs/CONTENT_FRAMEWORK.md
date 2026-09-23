@@ -237,6 +237,44 @@ Your build-skill class should resolve its own `type` getter lazily through
 `ModContent.SkillTypeFor(id)`, so it reads the correct virtual value after
 registration.
 
+## Saving your mod's data: `ModSave`
+
+The game only saves what its own classes know about, so a mod that remembers
+anything (who knows what, how old someone is, a settlement's tier) needs its own
+storage. `ModSave` (`src/Ruinarch.ModContent/ModSave.cs`) keeps it **inside the
+player's save file**.
+
+How it works: a Ruinarch save is a zip of the game's temp folder
+(`Utilities.tempZipPath`), and loading a save extracts that zip back into
+`Utilities.tempPath`. Just before the game saves, the framework writes each
+registered mod's data as `ModData/<id>.json` into that folder, so it ends up in
+the zip. Once a save has finished loading, it reads the file back. The data
+travels with the save: copying, renaming or deleting a save does the same to your
+mod's data. The game ignores the extra file, so a save made with your mod still
+loads without it.
+
+```csharp
+ModSave.Register("yourmod.feature",
+    save: () => JsonUtility.ToJson(myState),        // null = nothing to store
+    load: json => myState = json == null ? new MyState() : JsonUtility.FromJson<MyState>(json));
+```
+
+For every registered id:
+
+| Moment | Call | Game hook |
+|---|---|---|
+| Any game starts, new or loaded | `load(null)`, so no state leaks from the previous game | postfix `Initializer.InitializeDataBeforeWorldCreationMainThread` |
+| The player saves, or an autosave runs | `save()`; the result is written into the save | prefix `SaveCurrentProgressManager.DoManualSave` |
+| A save has finished loading, whole world in place | `load(json)`, or `load(null)` if the save has no data for this id | postfix `SaveManager.DeleteSaveFilesInTempDirectory` |
+
+Store references as persistent ids (`faction.persistentID`,
+`structure.persistentID`, `character.persistentID`) and resolve them in `load`
+(`FactionManager.Instance.GetFactionByPersistentID`,
+`DatabaseManager.Instance.structureDatabase.GetStructureByPersistentIDSafe`):
+the objects exist by then. Keep the id stable across versions, or older saves
+lose their data. A handler that throws is logged and skipped; it never stops the
+game saving or loading, or the other mods.
+
 ## Gotchas
 
 - **`Messenger` is internal to `Assembly-CSharp`.** An external mod assembly
