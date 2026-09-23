@@ -295,7 +295,10 @@ game saving or loading, or the other mods.
   the job's `StructureSetting`. Borrowing another structure's prefab through
   `PrefabSource` therefore builds *that* structure unless your mod redirects the type at
   construction time. Never mutate the prefab's field: prefabs are pooled and shared with
-  the real structure. See Ruinarch+'s `MassGraveConstruction` for a working pattern.
+  the real structure. The same prefab type also names the building in the builder's
+  action text ("... is building X", `BuildBlueprint.AddFillersToLog`). See
+  [`MassGraveConstruction.cs`](https://github.com/Xm0x/RuinarchMods/blob/master/RuinarchPlus/Phase2/MassGraveConstruction.cs)
+  in Ruinarch+ for a working pattern covering both.
 - **Release builds turn Unity logging off** after startup (`WorldConfigManager.Awake`
   sets `Debug.unityLogger.logEnabled = false`). `Debug.Log` from gameplay code never
   reaches `Player.log`; log through your mod's `ModLogger` (`mods.log`) instead.

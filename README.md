@@ -1,7 +1,7 @@
 # RuinarchModLoader
 DISCLAIMER: For %100 honesty, help of AI was used in this project.
 
-A first-class mod loader for **Ruinarch**, with [Harmony](https://github.com/pardeike/Harmony)
+A mod loader for **Ruinarch**, with [Harmony](https://github.com/pardeike/Harmony)
 runtime patching built in. Install it into your own copy of the game, drop mods
 in a folder, and they load at startup. No BepInEx, no external injector.
 
@@ -39,8 +39,16 @@ runtime, so there is nothing else to install.
 4. Drop mods into the `Mods/` folder it opens, then launch Ruinarch through
    Steam. **Uninstall** is a button in the same window (clean revert).
 
-> After a game update Steam replaces `Assembly-CSharp.dll`; just open the
-> installer again and click **Reinstall**.
+> After a game update Steam replaces `Assembly-CSharp.dll`; open the installer
+> again and click **Reinstall**.
+
+The installer also puts two helper DLLs in `Mods/`: `Ruinarch.ModContent.dll`, the
+framework that lets mods add new buildings and skills, and `Ruinarch.ModMenu.dll`, which
+replaces the game's Steam Workshop **Mods** window (main menu) with a list of your
+installed mods. From there you can turn each mod on or off (takes effect after a
+restart), read `mods.log`, and open the `Mods/` folder.
+
+For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
 ## Writing a mod
 
@@ -120,8 +128,9 @@ tools/build.sh                              # loader + patcher -> build/
 tools/build-gui.sh                          # graphical installer -> build/gui/{linux-x64,win-x64}
 ```
 
-`build/patcher/` then holds the patcher plus `Ruinarch.Modding.dll` and
-`0Harmony.dll`, ready to run or package with `tools/package-release.sh`.
+`build/patcher/` then holds the patcher plus `Ruinarch.Modding.dll`, `0Harmony.dll`,
+`Ruinarch.ModContent.dll` and `Ruinarch.ModMenu.dll`, ready to run or package with
+`tools/package-release.sh`.
 
 Requirements: .NET SDK (8.x) and a legitimate Ruinarch install to reference the
 game's Unity DLLs at build time.
