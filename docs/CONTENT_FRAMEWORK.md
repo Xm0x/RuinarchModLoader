@@ -91,15 +91,25 @@ names are the exact game methods patched.
 | `Patch_LoadNewStructureAt` | `LandmarkManager.LoadNewStructureAt` | Prefix | On save reload, rebuild a registered structure with the registration's `LoadFactory`, run `InitializeFromSave` unless it was destroyed, and register it in the structure database. |
 | `Patch_GetStructureData` | `LandmarkManager.GetStructureData` | Prefix | For a registered type, return the `StructureData` (prefab, visual, footprint) of the registration's `PrefabSource`, so no new Unity asset is required. |
 | `Patch_ConstructDemonicSkills` | `PlayerSkillManager.ConstructAllDemonicStructureSkillsData` | Postfix | After the game builds its skill dictionary from its fixed array, add each registered skill straight into `allDemonicStructureSkillsData`. The fixed-size demonic-skills array is **never** grown (see the gotcha below); only the dictionary that the build menu and `GetDemonicStructureSkillData` actually read is extended. |
-| `Patch_HasDemonicStructureSkill` | `PlayerSkillManager.HasDemonicStructureSkill` | Postfix | Report `true` for registered virtual skills, since some game paths gate on the fixed array. |
-| `Patch_IsDemonicStructure` | `Extensions.IsDemonicStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsDemonic` flag is set. |
-| `Patch_IsPlayerStructure` | `Extensions.IsPlayerStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsPlayerStructure` flag is set. |
+| `Patch_IsPlayerStructure` | `Extensions.IsPlayerStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsPlayerStructure` flag is set. The game has no separate "demonic" switch: a demonic (player-built) structure is a player structure. |
 | `Patch_IsSpecialStructure` | `Extensions.IsSpecialStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsSpecialStructure` flag is set. |
+| `Patch_IsVillageStructure` | `Extensions.IsVillageStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsVillageStructure` flag is set, so villagers treat it as a normal village building (placement rules, settlement ownership). |
+| `Patch_StructureToStringEnum` | `StringEnumLookUp.ToStringEnum(STRUCTURE_TYPE)` | Prefix | Name a registered type (`"Mass Grave"` becomes `"MASS_GRAVE"`). The game's lookup is a raw dictionary index that throws for any virtual value. |
+| `Patch_StructureToStringEnumWithSpace` | `StringEnumLookUp.ToStringEnumWithSpace(STRUCTURE_TYPE)` | Prefix | Display form of a registered type (its `DisplayName`). |
+| `Patch_LocalizedStructureName` | `Extensions.LocalizedStructureName(STRUCTURE_TYPE)` | Prefix | Localized name of a registered type (its `DisplayName`); the game's localization table has no entry for it. |
 | `Patch_UnlockRegisteredSkill` | `PlayerSkillComponent.AddAndCategorizePlayerSkill` | Postfix | When the player gains a registration's `UnlockWith` source skill, also grant the registered virtual skill (and broadcast the gained-skill signal) so it appears in the dynamic build menu. |
 
-The three `Extensions` classification patches make registered types answer the
-game's own type-classification switches, so the rest of the game treats the
-content as first-class.
+The `Extensions` classification patches make registered types answer the game's own
+type-classification switches, so the rest of the game treats the content as
+first-class. The name patches matter more than they look: every log line, job
+description and UI panel that mentions a structure names it through those lookups, and
+without them any mention of a registered structure throws.
+
+`Install()` applies the patches **one class at a time**. With `PatchAll`, a single patch
+whose target method does not exist aborts every patch after it and leaves the framework
+half-installed; applied individually, a bad patch only disables itself and is named in
+the log (`[ModContent] Patch X failed: ...`). The build also checks every patch
+statically (see `tools/check-patches.sh` below).
 
 ## The public API
 
@@ -125,6 +135,22 @@ public static PLAYER_SKILL_TYPE SkillTypeFor(string id);
 // RegisterStructure; a mod may also call it explicitly (order-independent).
 public static void Install();
 ```
+
+`ModArt` (`src/Ruinarch.ModContent/ModArt.cs`) turns loose image files shipped with a
+mod into sprites, with no AssetBundle and no Unity editor. `tools/build-mod.sh` deploys a
+mod's `art/`, `audio/` and `bundles/` folders next to its DLL, so a mod finds its files
+under `context.ModDirectory`.
+
+```csharp
+// Decode a PNG/JPG into a point-filtered Sprite (cached per path + ppu + pivot).
+// Returns null, never throws, for a missing file or bad image data.
+public static Sprite LoadSprite(string absolutePath, float pixelsPerUnit = 64f, Vector2? pivot = null);
+```
+
+Call it from gameplay code, **never from `OnLoad`**. Mods load inside the game
+assembly's module initializer, before Unity's graphics device exists; creating a
+texture there crashes the game outright (not a catchable exception). `LoadSprite`
+refuses and logs a warning if it is called before the first rendered frame.
 
 `StructureRegistration` (see `src/Ruinarch.ModContent/StructureRegistration.cs`)
 describes one new structure. You fill in the input fields; the framework fills in
@@ -160,10 +186,12 @@ public sealed class StructureRegistration
     // mod grants the skill itself.
     public PLAYER_SKILL_TYPE UnlockWith = PLAYER_SKILL_TYPE.NONE;
 
-    // Classification flags mirrored into the game's Extensions switches.
-    public bool IsDemonic = true;
+    // Classification flags mirrored into the game's Extensions switches. A demonic
+    // (player-built) structure is IsPlayerStructure; a normal village building that
+    // villagers own and build is IsVillageStructure.
     public bool IsPlayerStructure = true;
     public bool IsSpecialStructure = false;
+    public bool IsVillageStructure = false;
 
     // Filled by the framework during RegisterStructure:
     public STRUCTURE_TYPE StructureType { get; internal set; }
@@ -223,6 +251,32 @@ registration.
   adding to that array throws once the UI reads it. The framework adds registered
   skills to the runtime **dictionary** instead, which the build menu and
   `GetDemonicStructureSkillData` actually read.
+- **A reused prefab keeps its own type.** When villagers build from a blueprint, the
+  finished structure's type is read from the placed prefab's
+  `LocationStructureObject.structureType` (`GenericTileObject.BuildBlueprint`), not from
+  the job's `StructureSetting`. Borrowing another structure's prefab through
+  `PrefabSource` therefore builds *that* structure unless your mod redirects the type at
+  construction time. Never mutate the prefab's field: prefabs are pooled and shared with
+  the real structure. See Ruinarch+'s `MassGraveConstruction` for a working pattern.
+- **Release builds turn Unity logging off** after startup (`WorldConfigManager.Awake`
+  sets `Debug.unityLogger.logEnabled = false`). `Debug.Log` from gameplay code never
+  reaches `Player.log`; log through your mod's `ModLogger` (`mods.log`) instead.
+
+## Checking patches before you ship: `tools/check-patches.sh`
+
+A Harmony patch whose target method does not exist fails only at launch, and with
+`PatchAll` it silently takes every later patch down with it. `tools/check-patches.sh
+<assembly.dll>...` resolves every class-level `[HarmonyPatch(typeof(T), "Method"
+[, Type[] args])]` against the real game DLLs without running the game. It reports:
+
+- a target method that does not exist on the type or its base types,
+- an overloaded target given without argument types (Harmony would reject it as
+  ambiguous),
+- a patch parameter whose name is not a parameter of the target (or `__instance` on a
+  static method, `__result` on a void one, a `___field` that does not exist).
+
+`tools/build.sh` runs it on the framework and the mod menu, and `tools/build-mod.sh`
+runs it on every mod it builds and refuses to deploy a mod that fails.
 
 ## Shipping and installation
 

@@ -161,37 +161,35 @@ into game sprites while the game runs. The Unity editor is never involved. This
 one technique covers icons, portraits, tile-object images, reskinned structures,
 and user-interface graphics, which is the large majority of art a mod needs.
 
-Here is a complete helper that loads a PNG file into a usable sprite:
+The content framework ships a helper for this, `ModArt.LoadSprite`. It decodes a PNG
+(or JPG) into a point-filtered sprite, caches it, and returns `null` instead of
+throwing if the file is missing or not an image:
 
 ```csharp
-static Sprite LoadSprite(string path, float pixelsPerUnit = 64f) {
-    // Create an empty texture. Point filtering keeps pixel art crisp;
-    // use it to match Ruinarch's pixel look.
-    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) {
-        filterMode = FilterMode.Point
-    };
+using Ruinarch.ModContent;
 
-    // Read the PNG (or JPG) bytes off disk and decode them into the texture.
-    texture.LoadImage(System.IO.File.ReadAllBytes(path));
-
-    // Wrap the whole texture in a sprite. The (0.5, 0.5) pivot centres it;
-    // pixelsPerUnit controls on-screen size and should match the game's value.
-    return Sprite.Create(
-        texture,
-        new Rect(0, 0, texture.width, texture.height),
-        new Vector2(0.5f, 0.5f),
-        pixelsPerUnit);
-}
+// pixelsPerUnit controls on-screen size: at 64, a 64px image spans one map tile.
+Sprite sprite = ModArt.LoadSprite(absolutePathToPng, pixelsPerUnit: 64f);
 ```
+
+Put your images in an `art/` folder inside your mod's source folder.
+`tools/build-mod.sh` copies `art/` (and `audio/`, `bundles/`) next to your DLL, so at
+runtime they live under `context.ModDirectory`, the folder your DLL was loaded from.
+
+**Load art from gameplay, never from `OnLoad`.** Mods load before Unity's graphics
+device exists, and creating a texture at that point crashes the game outright. It
+is not an exception you can catch. `LoadSprite` refuses and logs a warning if it is
+called that early. Load lazily the first time something is shown, or on the first
+in-game tick.
 
 To change how something looks, assign your loaded sprite to the image components
 Unity uses to draw it (called `SpriteRenderer`s). For example, once a structure
 object exists in the world:
 
 ```csharp
-// context is the ModContext your mod received in OnLoad; ModsRoot is the Mods/ path.
-string imagePath = System.IO.Path.Combine(context.ModsRoot, "YourMod/art/yourart.png");
-Sprite sprite = LoadSprite(imagePath);
+// modDirectory is context.ModDirectory, saved from OnLoad.
+string imagePath = System.IO.Path.Combine(modDirectory, "art", "yourart.png");
+Sprite sprite = ModArt.LoadSprite(imagePath);
 
 foreach (var renderer in structureObject.GetComponentsInChildren<SpriteRenderer>())
     renderer.sprite = sprite;

@@ -90,7 +90,23 @@ tools/build-mod.sh path/to/MyMod  "/path/to/Ruinarch/Mods"
 ```
 
 This compiles against the game's assemblies, the modding API, and Harmony, and
-installs the result into the target `Mods/` folder (with `0Harmony.dll`).
+installs the result into the target `Mods/` folder (with `0Harmony.dll`). It also
+deploys the mod's `art/`, `audio/` and `bundles/` folders, and first checks every
+`[HarmonyPatch]` in the mod against the real game DLLs (`tools/check-patches.sh`): a
+patch whose target method does not exist fails the build instead of failing at launch.
+
+### Test a mod in the running game
+
+```bash
+tools/run-autotest.sh [timeout-seconds]
+```
+
+Launches Ruinarch through Steam with the test harness of the `RuinarchDebug` mod armed
+(from the [RuinarchMods](https://github.com/Xm0x/RuinarchMods) repo; it must be deployed).
+The harness starts a new world by itself, places the portal, runs the world at speed,
+plays out test scenarios, writes `PASS`/`FAIL` lines to `Mods/RuinarchDebug/autotest.log`,
+and quits the game. The script prints that log and exits non-zero on any failure.
+Steam must be running.
 
 ## Build from source
 

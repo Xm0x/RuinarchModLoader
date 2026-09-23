@@ -50,9 +50,11 @@ grouped under a unique owner.
 
 ## Logging: `ModLogger`
 
-`context.Logger.Info/Warning/Error` write to Unity's `Player.log` (prefixed with
-your mod id) and append to `Mods/mods.log`. Use `mods.log` while iterating: the
-Unity log is buffered and lags, `mods.log` is flushed on every write.
+`context.Logger.Info/Warning/Error` append to `Mods/mods.log` (flushed on every write)
+and also go to Unity's `Player.log`, prefixed with your mod id. Rely on `mods.log`: the
+shipped game switches Unity logging off once it starts initializing the world
+(`WorldConfigManager.Awake`), so anything logged during play, including a plain
+`Debug.Log`, never reaches `Player.log`.
 
 ## Patching the game with Harmony
 
