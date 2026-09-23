@@ -41,6 +41,11 @@ rsp="$(mktemp)"
 dotnet "$CSC" "@$rsp" || { echo "mod build FAILED" >&2; rm -f "$rsp"; exit 1; }
 rm -f "$rsp"
 
+# Verify every Harmony patch target resolves against the real game DLLs. A bad target
+# otherwise only fails at launch; never leave a mod that would do that deployed.
+"$MOD_PROJECT_DIR/tools/check-patches.sh" "$outdir/$name.dll" \
+  || { rm -f "$outdir/$name.dll"; echo "patch check FAILED for $name" >&2; exit 1; }
+
 [ -f "$src/mod.json" ] && cp "$src/mod.json" "$outdir/"
 # Deploy the mod's loose assets (art, audio, bundles) next to its DLL so a mod can
 # ship PNGs/WAVs/AssetBundles and resolve them at runtime under its own folder.

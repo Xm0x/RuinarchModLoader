@@ -39,6 +39,9 @@ echo "OK -> build/Ruinarch.Modding.dll"
 # --- Built-in mod menu: references the game DLL + Harmony + the loader API ---
 "$MOD_PROJECT_DIR/tools/build-modmenu.sh"
 
+# --- Verify every Harmony patch target resolves against the real game DLLs ---
+"$MOD_PROJECT_DIR/tools/check-patches.sh" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll"
+
 # --- Patcher: normal SDK build ---
 dotnet build "$MOD_PROJECT_DIR/src/Patcher/Patcher.csproj" -c Release -o "$MOD_BUILD_DIR/patcher" -v quiet
 echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
