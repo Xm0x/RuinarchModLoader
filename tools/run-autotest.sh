@@ -3,12 +3,14 @@
 # finish (it quits the game itself), and print the result log. Requires Steam running and
 # the RuinarchDebug mod deployed.
 #
-# Usage: tools/run-autotest.sh [timeout-seconds]   (default 1800)
+# Usage: tools/run-autotest.sh [timeout-seconds] [suites]   (default 1800; all suites)
+#   suites: comma-separated harness suite names to run alone, e.g. FamineSuite,TradeSuite
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 APPID=909320
 timeout="${1:-1800}"
+suites="${2:-}"
 mods="$RUIN_GAME_DIR/Mods/RuinarchDebug"
 log="$mods/autotest.log"
 
@@ -21,7 +23,7 @@ marker="$(mktemp)"
 trap 'rm -f "$marker"' EXIT
 fresh() { [ -f "$log" ] && [ "$log" -nt "$marker" ]; }
 sleep 1
-touch "$mods/autotest.flag"
+printf '%s' "$suites" > "$mods/autotest.flag"
 steam "steam://rungameid/$APPID" >/dev/null 2>&1 &
 
 started=0

@@ -107,7 +107,7 @@ patch whose target method does not exist fails the build instead of failing at l
 ### Test a mod in the running game
 
 ```bash
-tools/run-autotest.sh [timeout-seconds]
+tools/run-autotest.sh [timeout-seconds] [suites]
 ```
 
 Launches Ruinarch through Steam with the test harness of the `RuinarchDebug` mod armed
@@ -116,7 +116,9 @@ The harness starts a new world by itself, places the portal, runs the world at s
 plays out test scenarios, writes `PASS`/`FAIL` lines to `Mods/RuinarchDebug/autotest.log`,
 and quits the game. Earlier runs are kept in `Mods/RuinarchDebug/logs/`, named by date and
 time (newest 20). The script prints that log and exits non-zero on any failure.
-Steam must be running.
+Steam must be running. To run only some of the harness's suites (much faster while working
+on one feature), name them, comma-separated: `tools/run-autotest.sh 900 HuntSuite,TradeSuite`.
+The world is still generated and checked first.
 
 ## Build from source
 
