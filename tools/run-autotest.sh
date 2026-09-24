@@ -35,7 +35,13 @@ for ((t = 0; t < timeout; t += 5)); do
   fresh && grep -q 'AUTOTEST DONE' "$log" 2>/dev/null && { sleep 5; break; }
 done
 
-pgrep -f 'Ruinarch.exe' >/dev/null && { echo "(timeout: stopping the game)"; pkill -f 'Ruinarch.exe'; }
+# Under Proton the game hangs in Application.Quit (window up, main thread gone), so a
+# finished run usually still needs stopping.
+if pgrep -f 'Ruinarch.exe' >/dev/null; then
+  if fresh && grep -q 'AUTOTEST DONE' "$log" 2>/dev/null; then echo "(run done; stopping the game, which hangs on quit)"
+  else echo "(timeout: stopping the game)"; fi
+  pkill -f 'Ruinarch.exe'
+fi
 rm -f "$mods/autotest.flag"
 if fresh; then cat "$log"; else echo "no autotest.log produced (harness never ran)"; fi
 fresh && grep -q 'AUTOTEST DONE .* fail=0 ' "$log" 2>/dev/null

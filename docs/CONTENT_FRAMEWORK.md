@@ -296,9 +296,11 @@ game saving or loading, or the other mods.
   `PrefabSource` therefore builds *that* structure unless your mod redirects the type at
   construction time. Never mutate the prefab's field: prefabs are pooled and shared with
   the real structure. The same prefab type also names the building in the builder's
-  action text ("... is building X", `BuildBlueprint.AddFillersToLog`). See
-  [`MassGraveConstruction.cs`](https://github.com/Xm0x/RuinarchMods/blob/master/RuinarchPlus/Phase2/MassGraveConstruction.cs)
-  in Ruinarch+ for a working pattern covering both.
+  action text ("... is building X", `BuildBlueprint.AddFillersToLog`), and a half-built
+  blueprint reloads as the borrowed type unless your mod saves which tiles are yours. See
+  [`ModBuildings.cs`](https://github.com/Xm0x/RuinarchMods/blob/master/RuinarchPlus/ModBuildings.cs)
+  in Ruinarch+ for a working pattern covering all three (it builds the Mass Grave and the
+  Town Hall).
 - **Release builds turn Unity logging off** after startup (`WorldConfigManager.Awake`
   sets `Debug.unityLogger.logEnabled = false`). `Debug.Log` from gameplay code never
   reaches `Player.log`; log through your mod's `ModLogger` (`mods.log`) instead.
