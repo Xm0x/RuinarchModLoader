@@ -26,6 +26,12 @@ sleep 1
 printf '%s' "$suites" > "$mods/autotest.flag"
 steam "steam://rungameid/$APPID" >/dev/null 2>&1 &
 
+# A world that stops (nothing written to mods.log or autotest.log for 5 minutes; a running
+# world logs every few seconds) is a hang: note whether the game's threads are busy (a loop)
+# or idle (a deadlock or a dead main thread), then stop instead of waiting out the timeout.
+modslog="$RUIN_GAME_DIR/Mods/mods.log"
+silent() { [ -f "$1" ] && [ $(( $(date +%s) - $(stat -c %Y "$1") )) -ge 300 ]; }
+stalled() { fresh && silent "$log" && silent "$modslog"; }
 started=0
 for ((t = 0; t < timeout; t += 5)); do
   sleep 5
@@ -35,6 +41,11 @@ for ((t = 0; t < timeout; t += 5)); do
     break  # the game exited
   fi
   fresh && grep -q 'AUTOTEST DONE' "$log" 2>/dev/null && { sleep 5; break; }
+  if stalled; then
+    echo "(stalled: mods.log silent for 5 minutes; busiest game threads:)"
+    for pid in $(pgrep -f 'Ruinarch.exe'); do ps -L -o tid,stat,pcpu,time,comm -p "$pid" --sort=-pcpu | head -6; done
+    break
+  fi
 done
 
 # Under Proton the game hangs in Application.Quit (window up, main thread gone), so a
