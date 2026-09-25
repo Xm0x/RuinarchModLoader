@@ -54,6 +54,9 @@ if pgrep -f 'Ruinarch.exe' >/dev/null; then
   if fresh && grep -q 'AUTOTEST DONE' "$log" 2>/dev/null; then echo "(run done; stopping the game, which hangs on quit)"
   else echo "(timeout: stopping the game)"; fi
   pkill -f 'Ruinarch.exe'
+  # Gone before returning, so the next run does not find it still running.
+  for ((w = 0; w < 30 && $(pgrep -fc 'Ruinarch.exe') > 0; w++)); do sleep 1; done
+  pgrep -f 'Ruinarch.exe' >/dev/null && pkill -9 -f 'Ruinarch.exe'
 fi
 rm -f "$mods/autotest.flag"
 if fresh; then cat "$log"; else echo "no autotest.log produced (harness never ran)"; fi
