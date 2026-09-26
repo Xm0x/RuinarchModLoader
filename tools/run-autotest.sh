@@ -42,8 +42,18 @@ for ((t = 0; t < timeout; t += 5)); do
   fi
   fresh && grep -q 'AUTOTEST DONE' "$log" 2>/dev/null && { sleep 5; break; }
   if stalled; then
-    echo "(stalled: mods.log silent for 5 minutes; busiest game threads:)"
-    for pid in $(pgrep -f 'Ruinarch.exe'); do ps -L -o tid,stat,pcpu,time,comm -p "$pid" --sort=-pcpu | head -6; done
+    echo "(stalled: mods.log silent for 5 minutes; busiest game threads, then the main thread:)"
+    for pid in $(pgrep -f 'Ruinarch.exe'); do
+      ps -L -o tid,stat,pcpu,time,wchan:32,comm -p "$pid" --sort=-pcpu | head -6
+      ps -L -o tid,stat,pcpu,time,wchan:32,comm -p "$pid" | awk -v p="$pid" '$1 == p'
+    done
+    # The game's own log (under the Proton prefix) ends where the main thread stopped.
+    player="$(dirname "$RUIN_GAME_DIR")/../compatdata/$APPID/pfx/drive_c/users/steamuser/AppData/LocalLow/Maccima Games/Ruinarch/Player.log"
+    if [ -f "$player" ]; then
+      cp "$player" "$mods/logs/stalled-Player-$(date +%F_%H-%M-%S).log"
+      echo "(Player.log kept in $mods/logs/; its last lines:)"
+      tail -15 "$player" | cut -c1-300
+    fi
     break
   fi
 done
