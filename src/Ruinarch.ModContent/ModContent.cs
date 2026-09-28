@@ -158,17 +158,6 @@ namespace Ruinarch.ModContent
 			int value = ContentRegistry.AllocateValue(reg.Id, ContentRegistry.ActionsByType);
 			reg.Type = (INTERACTION_TYPE)value;
 			ContentRegistry.ActionsByType[value] = reg;
-			StateNameAndDuration[] states = new StateNameAndDuration[reg.States.Count];
-			for (int i = 0; i < states.Length; i++)
-			{
-				states[i] = new StateNameAndDuration
-				{
-					name = reg.States[i].Name,
-					status = reg.States[i].Success ? "Success" : "Fail",
-					duration = reg.States[i].DurationTicks
-				};
-			}
-			GoapActionStateDB.goapActionStates[reg.Type] = states;
 			// The game builds its action-name table at the main menu (after mods load); the
 			// patch adds our names then. Should it already exist, add them now as well.
 			Patch_ActionNames.AddNames();

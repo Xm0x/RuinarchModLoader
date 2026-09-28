@@ -160,8 +160,20 @@ ModContent.RegisterAction(new ActionRegistration {
         new ActionState("Write Success", 20, success: true,
             describe: node => node.actor.name + " wrote a letter at the " + node.poiTarget.name + "."),
     },
+
+    // What the villager "thinks" (the line under their name on the map, in their
+    // panel and tooltip) while walking there and while doing it. Optional: without
+    // them the framework uses "Going to Write Letter." and "Write Letter.".
+    Going = node => "Going to write a letter.",
+    Doing = node => "Writing a letter.",
 });
 ```
+
+Registering only reserves the action's number. The framework adds the states and makes
+your action when the game builds its own actions, each time a world is created or loaded. So in `OnLoad`, do
+not touch the game's action classes (such as `GoapActionStateDB`): some of them need the
+running game and break for the whole session if used too early. Your action's constructor
+runs later, so it may use them.
 
 A minimal action class, modelled on the game's own "Study Magic" (a villager standing
 next to a Book):

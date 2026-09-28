@@ -99,8 +99,9 @@ patches in `ActionPatches.cs`. Method names are the exact game methods patched.
 | `Patch_LocalizedStructureName` | `Extensions.LocalizedStructureName(STRUCTURE_TYPE)` | Prefix | Localized name of a registered type (its `DisplayName`); the game's localization table has no entry for it. |
 | `Patch_UnlockRegisteredSkill` | `PlayerSkillComponent.AddAndCategorizePlayerSkill` | Postfix | When the player gains a registration's `UnlockWith` source skill, also grant the registered virtual skill (and broadcast the gained-skill signal) so it appears in the dynamic build menu. |
 | `Patch_ActionNames` | `StringEnumLookUp.Initialize` | Postfix | Add each registered action's `Name` to the game's action-name table (`_interactionTypeStrings`). The game rebuilds that table at the main menu, after mods load; the `GoapAction` constructor reads it. |
-| `Patch_ActionData` | `InteractionManager.ConstructGoapActionData` | Postfix | After the game makes one instance of each of its actions (by reflection on the enum names), make each registered action with its `Factory` and add it to `goapActionData`, `goapActionList` and, per expected effect, `actionsCategorizedByEffectCondition`. |
+| `Patch_ActionData` | `InteractionManager.ConstructGoapActionData` | Postfix | After the game makes one instance of each of its actions (by reflection on the enum names), add each registered action's states to `GoapActionStateDB.goapActionStates`, make the action with its `Factory` and add it to `goapActionData`, `goapActionList` and, per expected effect, `actionsCategorizedByEffectCondition`. The states wait until here because `GoapActionStateDB`'s static constructor needs `GameManager`, which does not exist while mods load; touching the class from `OnLoad` breaks it for the whole session. |
 | `Patch_ActionDescription` | `GoapActionState.CreateDescriptionLog` | Prefix | For a registered action, make the state's log from its `Describe` text (with the action's usual fillers: actor, target, structure) instead of a text-table key the game does not have; no `Describe`, no log. |
+| `Patch_ActionThoughtBubble` | `ActualGoapNode.CreateThoughtBubbleLog` | Postfix | Give a registered action its thought bubbles (the line under a villager's name on the map, in their panel and tooltip): `Going` while they walk to the target, `Doing` while they do it, or defaults from the action's name. The game makes them only from text-table keys, and its UI throws for an action without them. |
 | `Patch_FixedTextLog` | `Log.ResetText` | Prefix | Keep the text of a fixed-text log (table `"ModContent"`) when the game would look it up again (a language change, a rename). |
 
 The `Extensions` classification patches make registered types answer the game's own
@@ -111,8 +112,8 @@ without them any mention of a registered structure throws.
 
 Registered actions need no reflection prefix: every table the game keeps per action is a
 dictionary keyed by `INTERACTION_TYPE` (names, states in `GoapActionStateDB.goapActionStates`,
-instances in `goapActionData`), and a virtual value is one more key. `RegisterAction` adds
-the states itself; the game finds the action's `Pre`/`PerTick`/`After` callbacks by name on
+instances in `goapActionData`), and a virtual value is one more key. `Patch_ActionData` adds
+the states; the game finds the action's `Pre`/`PerTick`/`After` callbacks by name on
 the registered class (`GoapAction.CreateStates`).
 
 `Install()` applies the patches **one class at a time**. With `PatchAll`, a single patch
@@ -145,9 +146,10 @@ public static PLAYER_SKILL_TYPE SkillTypeFor(string id);
 // RegisterStructure; a mod may also call it explicitly (order-independent).
 public static void Install();
 
-// Register a new villager action. Allocates the virtual INTERACTION_TYPE, adds the
-// states to GoapActionStateDB.goapActionStates, and returns the registration with
-// Type filled in. Calls Install() for you.
+// Register a new villager action. Allocates the virtual INTERACTION_TYPE and returns the
+// registration with Type filled in; its states and instance are added when the game builds
+// its own actions. Calls Install() for you. Call it from OnLoad; do not touch
+// GoapActionStateDB there (its static constructor needs the game running).
 public static ActionRegistration RegisterAction(ActionRegistration reg);
 
 // The virtual INTERACTION_TYPE allocated for a registered action id (or NONE).
@@ -225,6 +227,8 @@ public sealed class ActionRegistration
     public string Name;                // enum-style name, e.g. "WRITE_RECORD" ("Write Record")
     public Func<GoapAction> Factory;   // the one instance; built with ActionTypeFor(Id)
     public List<ActionState> States;   // at least one
+    public Func<ActualGoapNode, string> Going;   // thought bubble while walking there; null: "Going to <name>."
+    public Func<ActualGoapNode, string> Doing;   // thought bubble while doing it; null: "<name>."
     public INTERACTION_TYPE Type { get; internal set; }   // filled by RegisterAction
 }
 

@@ -58,6 +58,15 @@ namespace Ruinarch.ModContent
 		/// <summary>The action's states; at least one.</summary>
 		public List<ActionState> States = new List<ActionState>();
 
+		/// <summary>Optional. The villager's thought bubble (under their name on the map, in
+		/// their panel and tooltip) while they walk to the target, e.g. "Going to write.".
+		/// Null: "Going to " and the action's name. The game's UI needs one for every action.</summary>
+		public Func<ActualGoapNode, string> Going;
+
+		/// <summary>Optional. The thought bubble while they do it, e.g. "Writing.". Null: the
+		/// action's name.</summary>
+		public Func<ActualGoapNode, string> Doing;
+
 		/// <summary>Filled in by <see cref="ModContent.RegisterAction"/>.</summary>
 		public INTERACTION_TYPE Type { get; internal set; }
 	}
