@@ -20,6 +20,7 @@ namespace Ruinarch.ModContent
 		internal static readonly Dictionary<int, StructureRegistration> StructuresByType = new Dictionary<int, StructureRegistration>();
 		internal static readonly Dictionary<int, StructureRegistration> StructuresBySkill = new Dictionary<int, StructureRegistration>();
 		internal static readonly List<StructureRegistration> Structures = new List<StructureRegistration>();
+		internal static readonly Dictionary<int, ActionRegistration> ActionsByType = new Dictionary<int, ActionRegistration>();
 
 		internal static bool IsVirtual(int enumValue)
 		{
@@ -30,7 +31,7 @@ namespace Ruinarch.ModContent
 		/// Deterministic FNV-1a hash of the id into the virtual range, linear-probing on
 		/// collision. Same id -> same value every run, so saved content stays loadable.
 		/// </summary>
-		internal static int AllocateValue(string id, Dictionary<int, StructureRegistration> taken)
+		internal static int AllocateValue<T>(string id, Dictionary<int, T> taken)
 		{
 			uint hash = 2166136261u;
 			for (int i = 0; i < id.Length; i++)

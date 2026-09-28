@@ -132,5 +132,62 @@ namespace Ruinarch.ModContent
 			}
 			return PLAYER_SKILL_TYPE.NONE;
 		}
+
+		/// <summary>
+		/// Register a brand-new villager action. Allocates a virtual INTERACTION_TYPE
+		/// (deterministic from <see cref="ActionRegistration.Id"/>), adds its states and name
+		/// to the game's tables, and has the game create the action with
+		/// <see cref="ActionRegistration.Factory"/> when it builds its own actions. Returns the
+		/// registration with <see cref="ActionRegistration.Type"/> filled in.
+		/// </summary>
+		public static ActionRegistration RegisterAction(ActionRegistration reg)
+		{
+			if (reg == null)
+			{
+				throw new ArgumentNullException("reg");
+			}
+			if (string.IsNullOrEmpty(reg.Id) || string.IsNullOrEmpty(reg.Name))
+			{
+				throw new ArgumentException("ActionRegistration needs Id and Name");
+			}
+			if (reg.Factory == null || reg.States == null || reg.States.Count == 0)
+			{
+				throw new ArgumentException("ActionRegistration needs a Factory and at least one state");
+			}
+			Install();
+			int value = ContentRegistry.AllocateValue(reg.Id, ContentRegistry.ActionsByType);
+			reg.Type = (INTERACTION_TYPE)value;
+			ContentRegistry.ActionsByType[value] = reg;
+			StateNameAndDuration[] states = new StateNameAndDuration[reg.States.Count];
+			for (int i = 0; i < states.Length; i++)
+			{
+				states[i] = new StateNameAndDuration
+				{
+					name = reg.States[i].Name,
+					status = reg.States[i].Success ? "Success" : "Fail",
+					duration = reg.States[i].DurationTicks
+				};
+			}
+			GoapActionStateDB.goapActionStates[reg.Type] = states;
+			// The game builds its action-name table at the main menu (after mods load); the
+			// patch adds our names then. Should it already exist, add them now as well.
+			Patch_ActionNames.AddNames();
+			Debug.Log(string.Format("[ModContent] Registered action '{0}' ({1}) -> INTERACTION_TYPE={2}", reg.Id, reg.Name, value));
+			return reg;
+		}
+
+		/// <summary>The virtual INTERACTION_TYPE allocated for a registered action id (or
+		/// NONE). An action class passes this to the <c>GoapAction</c> constructor.</summary>
+		public static INTERACTION_TYPE ActionTypeFor(string id)
+		{
+			foreach (ActionRegistration reg in ContentRegistry.ActionsByType.Values)
+			{
+				if (reg.Id == id)
+				{
+					return reg.Type;
+				}
+			}
+			return INTERACTION_TYPE.NONE;
+		}
 	}
 }

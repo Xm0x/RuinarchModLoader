@@ -82,8 +82,8 @@ unchanged. The game's assembly is never edited.
 
 ## Patch table
 
-Every patch below lives in `src/Ruinarch.ModContent/ContentPatches.cs`. Method
-names are the exact game methods patched.
+Structure and skill patches live in `src/Ruinarch.ModContent/ContentPatches.cs`, action
+patches in `ActionPatches.cs`. Method names are the exact game methods patched.
 
 | Patch | Game method | Kind | Purpose |
 |---|---|---|---|
@@ -98,12 +98,22 @@ names are the exact game methods patched.
 | `Patch_StructureToStringEnumWithSpace` | `StringEnumLookUp.ToStringEnumWithSpace(STRUCTURE_TYPE)` | Prefix | Display form of a registered type (its `DisplayName`). |
 | `Patch_LocalizedStructureName` | `Extensions.LocalizedStructureName(STRUCTURE_TYPE)` | Prefix | Localized name of a registered type (its `DisplayName`); the game's localization table has no entry for it. |
 | `Patch_UnlockRegisteredSkill` | `PlayerSkillComponent.AddAndCategorizePlayerSkill` | Postfix | When the player gains a registration's `UnlockWith` source skill, also grant the registered virtual skill (and broadcast the gained-skill signal) so it appears in the dynamic build menu. |
+| `Patch_ActionNames` | `StringEnumLookUp.Initialize` | Postfix | Add each registered action's `Name` to the game's action-name table (`_interactionTypeStrings`). The game rebuilds that table at the main menu, after mods load; the `GoapAction` constructor reads it. |
+| `Patch_ActionData` | `InteractionManager.ConstructGoapActionData` | Postfix | After the game makes one instance of each of its actions (by reflection on the enum names), make each registered action with its `Factory` and add it to `goapActionData`, `goapActionList` and, per expected effect, `actionsCategorizedByEffectCondition`. |
+| `Patch_ActionDescription` | `GoapActionState.CreateDescriptionLog` | Prefix | For a registered action, make the state's log from its `Describe` text (with the action's usual fillers: actor, target, structure) instead of a text-table key the game does not have; no `Describe`, no log. |
+| `Patch_FixedTextLog` | `Log.ResetText` | Prefix | Keep the text of a fixed-text log (table `"ModContent"`) when the game would look it up again (a language change, a rename). |
 
 The `Extensions` classification patches make registered types answer the game's own
 type-classification switches, so the rest of the game treats the content as
 first-class. The name patches matter more than they look: every log line, job
 description and UI panel that mentions a structure names it through those lookups, and
 without them any mention of a registered structure throws.
+
+Registered actions need no reflection prefix: every table the game keeps per action is a
+dictionary keyed by `INTERACTION_TYPE` (names, states in `GoapActionStateDB.goapActionStates`,
+instances in `goapActionData`), and a virtual value is one more key. `RegisterAction` adds
+the states itself; the game finds the action's `Pre`/`PerTick`/`After` callbacks by name on
+the registered class (`GoapAction.CreateStates`).
 
 `Install()` applies the patches **one class at a time**. With `PatchAll`, a single patch
 whose target method does not exist aborts every patch after it and leaves the framework
@@ -134,6 +144,15 @@ public static PLAYER_SKILL_TYPE SkillTypeFor(string id);
 // Idempotent. Applies the framework's Harmony patches. Auto-called by
 // RegisterStructure; a mod may also call it explicitly (order-independent).
 public static void Install();
+
+// Register a new villager action. Allocates the virtual INTERACTION_TYPE, adds the
+// states to GoapActionStateDB.goapActionStates, and returns the registration with
+// Type filled in. Calls Install() for you.
+public static ActionRegistration RegisterAction(ActionRegistration reg);
+
+// The virtual INTERACTION_TYPE allocated for a registered action id (or NONE).
+// An action class passes it to the GoapAction constructor.
+public static INTERACTION_TYPE ActionTypeFor(string id);
 ```
 
 `ModArt` (`src/Ruinarch.ModContent/ModArt.cs`) turns loose image files shipped with a
@@ -198,6 +217,27 @@ public sealed class StructureRegistration
     public PLAYER_SKILL_TYPE SkillType { get; internal set; }
 }
 ```
+
+```csharp
+public sealed class ActionRegistration
+{
+    public string Id;                  // stable id; the virtual value is derived from it
+    public string Name;                // enum-style name, e.g. "WRITE_RECORD" ("Write Record")
+    public Func<GoapAction> Factory;   // the one instance; built with ActionTypeFor(Id)
+    public List<ActionState> States;   // at least one
+    public INTERACTION_TYPE Type { get; internal set; }   // filled by RegisterAction
+}
+
+public sealed class ActionState
+{
+    public string Name;                // e.g. "Write Success"; the class's AfterWriteSuccess runs at its end
+    public int DurationTicks;          // 20 ticks = 1 game hour
+    public bool Success;               // status "Success" or "Fail"
+    public Func<ActualGoapNode, string> Describe;   // the log's text, or null for no log
+}
+```
+
+A walkthrough for mod authors is in `ASSETS_AND_CONTENT.md` ("Adding a new action").
 
 ### Example
 

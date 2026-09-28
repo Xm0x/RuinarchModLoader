@@ -68,8 +68,9 @@ game's assembly.
 ## Part 1: new logic, using the content framework
 
 The loader ships a small library, `Ruinarch.ModContent`, that lets a mod register
-genuinely new structures and skills. You call it from your mod's `OnLoad`; it
-installs the necessary Harmony patches automatically the first time you use it.
+genuinely new structures, skills and villager actions. You call it from your mod's
+`OnLoad`; it installs the necessary Harmony patches automatically the first time you
+use it.
 
 ### How it works, in plain terms
 
@@ -123,10 +124,96 @@ var registration = ModContent.RegisterStructure(new StructureRegistration {
 `YourStructure` and `YourStructureData` are classes you write in your mod. You do
 not need to edit the game to create them; they live entirely in your mod's DLL.
 
+### Adding a new action
+
+Everything a villager does (eat, sleep, build, study a book) is an **action**: a class
+that derives from the game's `GoapAction`, identified by an `INTERACTION_TYPE` enum
+value. An action has one or more **states**, each with a name and a length in game
+ticks (20 ticks make one game hour). When a villager performs the action, they walk to
+the target (for most actions), enter a state, and when its time is up the action ends.
+The game calls methods on your class by name while that happens:
+
+- `Pre<State>(ActualGoapNode node)` when the state starts,
+- `PerTick<State>(ActualGoapNode node)` every tick,
+- `After<State>(ActualGoapNode node)` when it finishes (not if it is interrupted).
+
+`<State>` is the state's name without spaces, so a state "Write Success" calls
+`AfterWriteSuccess`. `node.actor` is the villager and `node.poiTarget` the target.
+
+Register the action in `OnLoad`:
+
+```csharp
+ModContent.RegisterAction(new ActionRegistration {
+    // A stable, unique id. Saves store the action by the number made from it,
+    // so never change it once players have saves.
+    Id = "yourname.write",
+
+    // The type's name in enum style. The game shows it as "Write Letter".
+    Name = "WRITE_LETTER",
+
+    // Makes the one instance of your action class.
+    Factory = () => new WriteLetter(),
+
+    // The states: name, length in ticks, whether finishing it is a success, and
+    // optionally the text of the log the action leaves behind.
+    States = {
+        new ActionState("Write Success", 20, success: true,
+            describe: node => node.actor.name + " wrote a letter at the " + node.poiTarget.name + "."),
+    },
+});
+```
+
+A minimal action class, modelled on the game's own "Study Magic" (a villager standing
+next to a Book):
+
+```csharp
+public class WriteLetter : GoapAction
+{
+    public WriteLetter() : base(ModContent.ActionTypeFor("yourname.write"))
+    {
+        actionIconString = GoapActionStateDB.Read_Icon;   // the icon over the villager
+        actionLocationType = ACTION_LOCATION_TYPE.NEAR_TARGET;
+        logTags = new[] { LOG_TAG.Work };
+    }
+
+    public override void Perform(ActualGoapNode node)
+    {
+        base.Perform(node);
+        SetState("Write Success", node);
+    }
+
+    protected override int GetBaseCost(Character actor, IPointOfInterest target, JobQueueItem job, OtherData[] otherData) => 10;
+
+    public void AfterWriteSuccess(ActualGoapNode node)
+    {
+        // What the action does once finished.
+    }
+}
+```
+
+To make a villager do it, give them a job for exactly that action on one target, the
+way the game does for its own idle actions:
+
+```csharp
+INTERACTION_TYPE write = ModContent.ActionTypeFor("yourname.write");
+villager.PlanIdle(JOB_TYPE.IDLE, write, bookShelf);
+```
+
+**The log.** The game's own actions take their log text from its translation tables,
+which have no entry for your action. Give a state a `describe` function instead: it is
+asked for the text when the state starts, and the log involves the villager and the
+target, so it shows in the Logs tab of both (click the target object, then "Logs") and
+in the event log. The log is kept only when the state finishes. Without `describe` the
+action leaves no log.
+
+**Saves.** An action in progress is saved as its number and comes back when the save
+loads, because your mod registers the action again before any save loads. Without your
+mod installed, such a save cannot load, as with any content a mod adds.
+
 ### When you need the framework, and when you don't
 
 - **Use the framework** when you are adding content that the game creates by
-  name: a new structure type or a new build skill.
+  name: a new structure type, a new build skill, or a new villager action.
 - **You do not need it** for changing behaviour that already exists (making an
   existing action cheaper, altering a rule, and so on). Those are ordinary
   Harmony patches, covered in `WRITING_MODS.md`.
@@ -300,6 +387,7 @@ new **look** on an existing structure, use Approach C.
 |---|---|---|
 | A change to existing behaviour or a rule | An ordinary Harmony patch | No |
 | A new structure or skill (new logic + identity) | The content framework (Part 1) | No |
+| A new thing villagers do | The content framework, "Adding a new action" | No |
 | A new icon, portrait, or interface image | Rung 2, a loose PNG | No |
 | A new look for an existing structure | Rung 2, or Approach C | No, or very little |
 | A new sound | A loose `.wav` / `.ogg` played via `AudioSource` | No |

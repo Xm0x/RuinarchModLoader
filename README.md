@@ -43,7 +43,7 @@ runtime, so there is nothing else to install.
 > again and click **Reinstall**.
 
 The installer also puts two helper DLLs in `Mods/`: `Ruinarch.ModContent.dll`, the
-framework that lets mods add new buildings and skills, and `Ruinarch.ModMenu.dll`, which
+framework that lets mods add new buildings, skills and villager actions, and `Ruinarch.ModMenu.dll`, which
 replaces the game's Steam Workshop **Mods** window (main menu) with a list of your
 installed mods. From there you can turn each mod on or off (takes effect after a
 restart), read `mods.log`, and open the `Mods/` folder.
@@ -87,10 +87,10 @@ Ship an optional `mod.json` next to your DLL:
 ```
 
 The full API and patterns are in [`docs/WRITING_MODS.md`](docs/WRITING_MODS.md).
-Adding **new content** (new structures and skills, sprites, sounds, and
-AssetBundles) is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
-The content-injection framework that backs new structures and skills has its own
-specification in [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
+Adding **new content** (new structures, skills and villager actions, sprites, sounds,
+and AssetBundles) is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
+The content-injection framework that backs new structures, skills and actions has its
+own specification in [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
 
 ### Build a mod
 
