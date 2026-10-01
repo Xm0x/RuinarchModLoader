@@ -379,6 +379,26 @@ namespace Ruinarch.Modding
 			}
 		}
 
+		// An assembly's simple name, or null. Runtime-generated (dynamic) assemblies are
+		// skipped, and one whose name cannot be read is passed over: in a test run, Mono threw
+		// CultureNotFoundException (culture name of garbage bytes) from GetName() on one loaded
+		// assembly, which would fail every lookup that walked past it.
+		internal static string SafeName(Assembly a)
+		{
+			if (a == null || a.IsDynamic)
+			{
+				return null;
+			}
+			try
+			{
+				return a.GetName().Name;
+			}
+			catch
+			{
+				return null;
+			}
+		}
+
 		private static Assembly ResolveFromMods(object sender, ResolveEventArgs args)
 		{
 			try
@@ -387,7 +407,7 @@ namespace Ruinarch.Modding
 
 				// Return an already-loaded assembly with a matching simple name first.
 				Assembly existing = AppDomain.CurrentDomain.GetAssemblies()
-					.FirstOrDefault(a => a.GetName().Name == simpleName);
+					.FirstOrDefault(a => SafeName(a) == simpleName);
 				if (existing != null)
 				{
 					return existing;
