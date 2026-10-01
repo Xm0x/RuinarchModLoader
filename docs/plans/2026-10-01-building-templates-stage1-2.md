@@ -1957,7 +1957,7 @@ and add this method to `ModLoader` (after `Initialize`):
 			try
 			{
 				string path = Path.Combine(ModsRoot, "Ruinarch.ModContent.dll");
-				Assembly framework = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Ruinarch.ModContent")
+				Assembly framework = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => SafeName(a) == "Ruinarch.ModContent")
 					?? (File.Exists(path) ? Assembly.LoadFrom(path) : null);
 				framework?.GetType("Ruinarch.ModContent.ModContent")?.GetMethod("Install")?.Invoke(null, null);
 			}
