@@ -110,11 +110,49 @@ namespace Ruinarch.Modding
 				{
 					TryLoad(dll);
 				}
+				StartContentFramework();
+				RecordTemplatePacks();
 				Debug.Log($"[ModLoader] Done. {_loaded.Count} of {_known.Count} discovered mod(s) active.");
 			}
 			catch (Exception e)
 			{
 				Debug.LogError($"[ModLoader] Fatal error during init: {e}");
+			}
+		}
+
+		// The content framework (Mods/Ruinarch.ModContent.dll) installs itself when a mod calls
+		// it; start it here too, so template packs (data only, no DLL) load with no code mod
+		// present. By reflection: the loader does not depend on the framework.
+		private static void StartContentFramework()
+		{
+			try
+			{
+				string path = Path.Combine(ModsRoot, "Ruinarch.ModContent.dll");
+				Assembly framework = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => SafeName(a) == "Ruinarch.ModContent")
+					?? (File.Exists(path) ? Assembly.LoadFrom(path) : null);
+				framework?.GetType("Ruinarch.ModContent.ModContent")?.GetMethod("Install")?.Invoke(null, null);
+			}
+			catch (Exception e)
+			{
+				Debug.LogWarning($"[ModLoader] Could not start the content framework: {e.Message}");
+			}
+		}
+
+		// A template pack has a mod.json and templates/ but no DLL: list it, so the mod
+		// manager can switch it off (the framework reads the same disabled list).
+		private static void RecordTemplatePacks()
+		{
+			foreach (string dir in System.IO.Directory.GetDirectories(ModsRoot))
+			{
+				string json = Path.Combine(dir, "mod.json");
+				if (!File.Exists(json) || !System.IO.Directory.Exists(Path.Combine(dir, "templates"))
+					|| System.IO.Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly).Length > 0)
+				{
+					continue;
+				}
+				ModInfo info = ModInfo.LoadOrDefault(json, Path.GetFileName(dir));
+				bool enabled = !_disabled.Contains(info.id);
+				RecordKnown(info, dir, null, enabled, loaded: enabled);
 			}
 		}
 

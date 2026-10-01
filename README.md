@@ -91,6 +91,8 @@ Adding **new content** (new structures, skills and villager actions, sprites, so
 and AssetBundles) is covered in [`docs/ASSETS_AND_CONTENT.md`](docs/ASSETS_AND_CONTENT.md).
 The content-injection framework that backs new structures, skills and actions has its
 own specification in [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
+New looks for the game's buildings, as data-only template packs, are covered in
+[`docs/TEMPLATES.md`](docs/TEMPLATES.md).
 
 ### Build a mod
 
@@ -125,6 +127,7 @@ The world is still generated and checked first.
 ```bash
 export RUIN_GAME_DIR="/path/to/Ruinarch"   # your install (for build-time refs)
 tools/build.sh                              # loader + patcher -> build/
+dotnet build/patcher/RuinarchModLoader.Patcher.dll --game "$RUIN_GAME_DIR"  # install into your copy
 ```
 
 ```bash

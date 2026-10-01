@@ -2409,3 +2409,14 @@ Deploy both mods and run two full harness regressions (`./tools/run-autotest.sh 
 ```bash
 cd LOADER && git add docs README.md && git commit -m "docs: building templates (TEMPLATES.md)" && git push origin master && git push gitlab master
 ```
+
+---
+
+## Execution notes (2026-10-01)
+
+- **Human and Elven buildings are in the culture-neutral lists.** The probe's catalogue (70 kinds) has no `Human_Empire` or `Elven_Kingdom` entries at all; those villages get `FACTION_TYPE.None`'s lists through `StructureData.GetStructurePrefabs`' fallback. Only `Demon_Cult`, `Divine_Church` and `Wiccans` have lists of their own. So the Task 2 pre-flight grep `TAVERN | Human_Empire` is always 0, and the suite picks the `None` Tavern and Dwelling instead.
+- **Variants follow the same fallback.** As planned, a variant registered for `None` would never reach a Human village (the finalizer keyed on `Human_Empire`). `TemplateRegistry.WithVariants` now adds the `None` variants for any culture without a list of its own (`TemplateCatalogue.HasOwnList`, shared with `Originals`), and registering clears the whole combined-list cache. The Task 4 test picks a village whose culture uses the Tavern's list and asks for the list with that culture, so it covers the fallback.
+- **Prefab anatomy** (special building `Abandoned Mine 1`): `LocationStructureObject` on the root; Ground and Structure Walls are Tilemaps under `Content/TileMaps`; thin walls are `ThinWallGameObject` children of the walls Tilemap, each with a `Visual` (and sometimes a `Corner`) SpriteRenderer. The dump is kept at `~/ruinarch-runs/anatomy.txt`.
+- **Click-area semantics:** `clickBox` overrides an existing native collider only, as the planned builder does. A prefab with no collider keeps the game's tile-based selection (`InnerMapManager.TryPopulateSelectablesOnTile`); adding a physics collider is not needed to select it. The authoring documentation now distinguishes these cases.
+- **Runtime acceptance:** two completed fresh-world full regressions passed with no game exceptions: 119 pass / 0 fail / 17 skip (`~/ruinarch-runs/templates-final-retry-full-1.log`) and 164 pass / 0 fail / 14 skip (`~/ruinarch-runs/templates-final-confirm-full-2.log`). Both exercised JSON/export round trips, registered-kind identity, culture fallback, placement and entrance paths, villager blueprint/build jobs, saved pool names, missing-pack fallback, PNG floors and pack disabling. Data-only startup was also verified with Ruinarch+ disabled: 20 pass / 0 fail / 0 skip (`~/ruinarch-runs/templates-data-only.log`).
+- **Unsuccessful runs were not counted:** one process exit had no managed exception or new crash dump; another completed run had an unbuilt Town Hall after 120 hours. Three subsequent targeted template/tier runs passed 42/0/0 each. The harness retains construction prerequisite diagnostics; no production change was made for that unreproduced delay.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using Inner_Maps.Location_Structures;
 using Locations.Settlements;
@@ -77,16 +78,32 @@ namespace Ruinarch.ModContent
 
 	/// <summary>Blueprint placement asks the structure data for prefabs keyed by the full
 	/// StructureSetting (type + resource). A registered type has no entry of its own, so look
-	/// up the PrefabSource's prefabs for the same resource instead.</summary>
+	/// up the PrefabSource's prefabs for the same resource instead. Template variants are
+	/// appended (Templates/TemplateRegistry.WithVariants).</summary>
 	[HarmonyPatch(typeof(StructureData), nameof(StructureData.GetStructurePrefabs), new Type[] { typeof(FACTION_TYPE), typeof(StructureSetting) })]
 	internal static class Patch_GetStructurePrefabs
 	{
-		private static void Prefix(ref StructureSetting p_structureSetting)
+		private static void Prefix(ref StructureSetting p_structureSetting, out StructureSetting __state)
 		{
+			__state = p_structureSetting;
 			if (ContentRegistry.StructuresByType.TryGetValue((int)p_structureSetting.structureType, out StructureRegistration reg))
 			{
 				p_structureSetting = new StructureSetting(reg.PrefabSource, p_structureSetting.resource);
 			}
+		}
+
+		// Template variants join the list for the kind as asked for (a registered kind's own,
+		// not its PrefabSource's). Where the game has no list it throws; variants alone then
+		// answer.
+		private static Exception Finalizer(Exception __exception, FACTION_TYPE p_type, StructureSetting __state, ref List<GameObject> __result)
+		{
+			List<GameObject> withVariants = Templates.TemplateRegistry.WithVariants(p_type, __state, __exception == null ? __result : null);
+			if (withVariants != null)
+			{
+				__result = withVariants;
+				return null;
+			}
+			return __exception;
 		}
 	}
 

@@ -299,11 +299,21 @@ system (Wwise) that is awkward to extend. You can sidestep it entirely: load a
 loose `.wav` or `.ogg` file at runtime and play it through a standard Unity
 `AudioSource` component that your mod creates.
 
-### Rung 3: build a new prefab as an AssetBundle (editor required, small and additive)
+### Rung 3: describe a building layout in a template (no editor)
 
-You only need this rung when you want a genuinely new **shape**: a structure with
-a different footprint, a custom tile layout, an animation, or a particle effect,
-none of which can be expressed as a single flat sprite.
+For village and special buildings, [building templates](TEMPLATES.md) describe the floor,
+walls, furniture, entrances and footprint in JSON. Export an existing game building,
+then edit its tile rows and object coordinates. Mix stock assets with your own loose
+PNGs. A template pack needs no DLL and no Unity editor.
+
+Templates add looks for existing game kinds or kinds registered by a code mod. They do
+not define new gameplay logic, and demonic buildings are outside their scope.
+
+### Rung 4: build a new prefab as an AssetBundle (editor required, small and additive)
+
+Use this rung for custom visual hierarchies, animations, particle effects, or structures
+outside the template system. A different village-building footprint or tile layout alone
+does not require an AssetBundle.
 
 An **AssetBundle** is a single file that Unity produces containing your custom
 content. You build it once in the Unity editor, ship that one file inside your mod
@@ -321,7 +331,7 @@ game data.
 
 ---
 
-## What a "structure" really is (important before you try Rung 3)
+## What a "structure" really is (important before you try Rung 4)
 
 A Ruinarch structure is **not** just an image. It is a Unity object (a
 "GameObject") that carries a game-specific component called
@@ -338,8 +348,8 @@ place and run the structure, including:
   and a click collider (so the player can select it)
 
 In other words, the "asset" for a structure is a tilemap-based object with a
-game component, not a lone picture. That is why there are three practical ways to
-create one, from most effort to least.
+game component, not a lone picture. Templates construct that object for you. If you
+author a prefab yourself instead, these are three approaches, from most effort to least.
 
 ### Approach A: a Unity project that references the game's files (full control)
 
@@ -385,8 +395,8 @@ new **look** on an existing structure, use Approach C.
 - **Match sorting and scale.** Your object's sorting layer and its
   pixels-per-unit must match the game's, or it will draw in front of or behind the
   map, or appear at the wrong size.
-- **Tilemaps need `Tile` assets, not just PNGs.** Painting tilemaps is genuine
-  editor work, and it only matters for Approach A / new footprints.
+- **AssetBundle tilemaps need `Tile` assets, not just PNGs.** The Unity project must
+  provide those assets. JSON templates create their tiles at runtime instead.
 - **Keep bundles additive.** Ship the `.bundle` inside your mod's folder and load
   it with `AssetBundle.LoadFromFile`. Never place it inside the game's data
   folders.
@@ -401,6 +411,6 @@ new **look** on an existing structure, use Approach C.
 | A new structure or skill (new logic + identity) | The content framework (Part 1) | No |
 | A new thing villagers do | The content framework, "Adding a new action" | No |
 | A new icon, portrait, or interface image | Rung 2, a loose PNG | No |
-| A new look for an existing structure | Rung 2, or Approach C | No, or very little |
+| A new look or layout for a village or special building | Rung 3, a building template | No |
 | A new sound | A loose `.wav` / `.ogg` played via `AudioSource` | No |
-| A new structure with a brand new shape | Rung 3 with Approach A | Yes (version 2020.3.20f1) |
+| A custom prefab outside the template system | Rung 4 with Approach A or B | Yes (version 2020.3.20f1) |
