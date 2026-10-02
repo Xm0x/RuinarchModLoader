@@ -15,6 +15,7 @@ namespace Ruinarch.ModContent.Templates
 	internal static class TemplateCatalogue
 	{
 		private static List<GameLook> _looks;
+		internal static bool HasLooks => _looks != null && _looks.Count > 0;
 
 		internal static IReadOnlyList<GameLook> Looks()
 		{

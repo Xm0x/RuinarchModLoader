@@ -319,16 +319,14 @@ namespace Ruinarch.ModContent.Templates
 			_started = true;
 			TemplatePalette.Gather();
 			FrameworkLog.Info($"Templates ready: {TemplatePalette.GameTiles.Count} game tiles, {TemplatePalette.GameSprites.Count} sprites, {TemplateCatalogue.Looks().Count} building looks.");
-			int packs = 0, loaded = 0, skipped = 0, off = 0;
-			foreach (string dir in TemplatePacks.PackDirectories())
+			int loaded = 0, skipped = 0;
+			foreach (string dir in TemplatePacks.PackDirectories)
 			{
 				PackLoadReport r = TemplatePacks.Load(dir);
-				packs++;
 				loaded += r.Loaded;
 				skipped += r.Problems.Count;
-				off += r.Disabled ? 1 : 0;
 			}
-			FrameworkLog.Info($"Template packs: {packs} found ({off} switched off), {loaded} template(s) loaded, {skipped} skipped.");
+			FrameworkLog.Info($"Template packs: {TemplatePacks.PackDirectories.Count} accepted by the loader, {loaded} template(s) loaded, {skipped} skipped.");
 		}
 	}
 }

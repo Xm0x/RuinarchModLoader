@@ -9,12 +9,22 @@ source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 mkdir -p "$MOD_BUILD_DIR"
 
+# --- Mono.Cecil: the loader reads package DLL metadata before loading anything.
+# Same package/version as the patcher (src/Patcher/Patcher.csproj); the netstandard2.0
+# build runs on the game's Mono and ships in Mods/ like 0Harmony.
+CECIL_VERSION=0.11.5
+if [ ! -f "$MOD_LIB_DIR/Mono.Cecil.dll" ]; then
+  dotnet restore "$MOD_PROJECT_DIR/src/Patcher/Patcher.csproj" -v quiet >/dev/null
+  mkdir -p "$MOD_LIB_DIR"
+  cp "${NUGET_PACKAGES:-$HOME/.nuget/packages}/mono.cecil/$CECIL_VERSION/lib/netstandard2.0/Mono.Cecil.dll" "$MOD_LIB_DIR/"
+fi
+
 # --- Loader assembly: compile against the game's own Unity/base DLLs ---
 CSC="$(ls -1 /usr/lib64/dotnet/sdk/*/Roslyn/bincore/csc.dll 2>/dev/null | sort -V | tail -1)"
 [ -n "$CSC" ] || CSC="$(ls -1 "$(dirname "$(command -v dotnet)")"/sdk/*/Roslyn/bincore/csc.dll 2>/dev/null | sort -V | tail -1)"
 [ -n "$CSC" ] || { echo "Roslyn csc.dll not found under the dotnet SDK" >&2; exit 1; }
 
-refs=(mscorlib System System.Core netstandard UnityEngine.CoreModule UnityEngine.JSONSerializeModule)
+refs=(mscorlib System System.Core netstandard UnityEngine.CoreModule UnityEngine.JSONSerializeModule Newtonsoft.Json)
 rsp="$(mktemp)"
 {
   echo "-target:library"
@@ -27,6 +37,7 @@ rsp="$(mktemp)"
     dll="$RUIN_MANAGED_DIR/$r.dll"
     [ -f "$dll" ] && echo "-r:$dll" || { echo "missing reference $dll" >&2; exit 1; }
   done
+  echo "-r:$MOD_LIB_DIR/Mono.Cecil.dll"
   find "$MOD_PROJECT_DIR/src/Ruinarch.Modding" -name '*.cs' -print
 } > "$rsp"
 dotnet "$CSC" "@$rsp" || { echo "loader build FAILED" >&2; rm -f "$rsp"; exit 1; }
@@ -49,6 +60,7 @@ echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
 # --- Stage loader + Harmony next to the patcher so install can find them ---
 cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_LIB_DIR/0Harmony.dll"           "$MOD_BUILD_DIR/patcher/"
+cp "$MOD_LIB_DIR/Mono.Cecil.dll"         "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll"    "$MOD_BUILD_DIR/patcher/"
-echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll + Ruinarch.ModContent.dll + Ruinarch.ModMenu.dll)"
+echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll + Mono.Cecil.dll + Ruinarch.ModContent.dll + Ruinarch.ModMenu.dll)"

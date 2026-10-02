@@ -10,26 +10,26 @@ namespace Ruinarch.ModContent.Templates
 	public sealed class PackLoadReport
 	{
 		public string PackId;
-		/// <summary>Switched off in the mod manager (modloader.config.json): nothing loaded.</summary>
-		public bool Disabled;
 		public int Loaded;
 		/// <summary>One line per skipped file: <c>pack/file.json: reason</c>.</summary>
 		public List<string> Problems = new List<string>();
 	}
 
 	/// <summary>
-	/// Template packs: a folder in Mods/ with a <c>templates/</c> folder (a data-only pack, or
-	/// a code mod shipping templates). Its id is mod.json's id, else the folder name; every
-	/// template id in it starts with that id and a '/'.
+	/// Template packs: a package folder with a <c>templates/</c> folder (a data-only pack, or
+	/// a code mod shipping templates). Its id is mod.json's id; every template id in it starts
+	/// with that id and a '/'. The loader decides which packages are compatible and enabled
+	/// and hands over their directories; the framework never scans Mods/ or Workshop folders.
 	/// </summary>
 	internal static class TemplatePacks
 	{
-		internal static IEnumerable<string> PackDirectories()
+		private static string[] _accepted = new string[0];
+
+		internal static IReadOnlyList<string> PackDirectories => _accepted;
+
+		internal static void SetPackDirectories(string[] directories)
 		{
-			string root = FrameworkLog.ModsRoot;
-			return Directory.Exists(root)
-				? Directory.GetDirectories(root).Where(d => Directory.Exists(Path.Combine(d, "templates"))).OrderBy(d => d, StringComparer.Ordinal)
-				: Enumerable.Empty<string>();
+			_accepted = (directories ?? new string[0]).Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 		}
 
 		internal static string PackId(string dir)
@@ -46,30 +46,9 @@ namespace Ruinarch.ModContent.Templates
 			}
 		}
 
-		// The mod manager's switch (Mods/modloader.config.json, {"disabled":[ids]}); read
-		// directly, the framework does not reference the loader.
-		internal static bool IsDisabled(string id)
-		{
-			string config = Path.Combine(FrameworkLog.ModsRoot, "modloader.config.json");
-			try
-			{
-				return File.Exists(config) && JObject.Parse(File.ReadAllText(config))["disabled"] is JArray list
-					&& list.Any(x => string.Equals((string)x, id, StringComparison.OrdinalIgnoreCase));
-			}
-			catch
-			{
-				return false;
-			}
-		}
-
 		internal static PackLoadReport Load(string dir)
 		{
 			PackLoadReport report = new PackLoadReport { PackId = PackId(dir) };
-			if (IsDisabled(report.PackId))
-			{
-				report.Disabled = true;
-				return report;
-			}
 			string templates = Path.Combine(dir, "templates");
 			foreach (string file in Directory.Exists(templates) ? Directory.GetFiles(templates, "*.json").OrderBy(f => f, StringComparer.Ordinal) : Enumerable.Empty<string>())
 			{

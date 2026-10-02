@@ -15,8 +15,8 @@ namespace Ruinarch.ModContent.Templates
 
 	/// <summary>
 	/// Building templates: export the game's buildings, build and register new looks, load
-	/// template packs. See docs/TEMPLATES.md. Everything but JSON needs a game scene (call it
-	/// from in-game, not from a mod's OnLoad).
+	/// template packs. See docs/TEMPLATES.md. Authoring needs TemplateAuthoring.Prepare()
+	/// at the menu or a loaded game scene; registering variants needs a loaded game scene.
 	/// </summary>
 	public static class ModTemplates
 	{
@@ -77,6 +77,7 @@ namespace Ruinarch.ModContent.Templates
 		/// pool and a variant in the game's lists. Throws <see cref="TemplateException"/>.</summary>
 		public static IReadOnlyList<GameObject> Register(BuildingTemplate t, string packDirectory)
 		{
+			WorldReady();
 			Ready();
 			return TemplateRegistry.Register(t, packDirectory);
 		}
@@ -87,21 +88,38 @@ namespace Ruinarch.ModContent.Templates
 			return TemplateRegistry.PrefabsFor(templateId);
 		}
 
-		/// <summary>Loads a template pack folder now (the framework loads every pack in Mods/
-		/// at startup the same way). Problems are also written to mods.log.</summary>
+		/// <summary>Loads a template pack folder now. At startup the framework loads every
+		/// pack the loader accepted the same way. Problems are also written to mods.log.</summary>
 		public static PackLoadReport LoadPack(string packDirectory)
 		{
+			WorldReady();
 			Ready();
 			return TemplatePacks.Load(packDirectory);
 		}
 
+		/// <summary>Package directories the loader accepted (compatible and enabled) for
+		/// template loading this session, local and Steam Workshop.</summary>
+		public static IReadOnlyList<string> PackDirectories => TemplatePacks.PackDirectories;
+
+		/// <summary>Called by the loader, by reflection, before the first world is made.</summary>
+		public static void SetPackDirectories(string[] directories)
+		{
+			TemplatePacks.SetPackDirectories(directories);
+		}
+
 		private static void Ready()
 		{
-			if (LandmarkManager.Instance == null)
+			if (LandmarkManager.Instance == null && !TemplateCatalogue.HasLooks)
 			{
-				throw new TemplateException("building templates need a game scene: call them in-game, not from OnLoad");
+				throw new TemplateException("building assets are not ready: run TemplateAuthoring.Prepare at the menu, or call in-game");
 			}
 			TemplatePalette.Gather();
+		}
+
+		private static void WorldReady()
+		{
+			if (LandmarkManager.Instance == null || TemplateAuthoring.Loading)
+				throw new TemplateException("registering templates needs a live game scene, not an authoring preload");
 		}
 	}
 }

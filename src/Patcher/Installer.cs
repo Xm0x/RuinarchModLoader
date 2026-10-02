@@ -24,6 +24,7 @@ namespace Ruinarch.Modding.Patcher
 		public const string LoaderType = "Ruinarch.Modding.ModLoader";
 		public const string LoaderMethod = "Initialize";
 		public const string Harmony = "0Harmony.dll";
+		public const string Cecil = "Mono.Cecil.dll";
 		public const string ContentFramework = "Ruinarch.ModContent.dll";
 		public const string ModMenu = "Ruinarch.ModMenu.dll";
 
@@ -100,6 +101,7 @@ namespace Ruinarch.Modding.Patcher
 
 				string loaderSrc = FindNextTo(LoaderAssembly, loaderSrcDirs);
 				string harmonySrc = FindNextTo(Harmony, loaderSrcDirs);
+				string cecilSrc = FindNextTo(Cecil, loaderSrcDirs);
 				if (loaderSrc == null)
 				{
 					log($"ERROR: {LoaderAssembly} not found next to the installer. Keep the release files together.");
@@ -108,6 +110,11 @@ namespace Ruinarch.Modding.Patcher
 				if (harmonySrc == null)
 				{
 					log($"ERROR: {Harmony} not found next to the installer. Keep the release files together.");
+					return false;
+				}
+				if (cecilSrc == null)
+				{
+					log($"ERROR: {Cecil} not found next to the installer. Keep the release files together.");
 					return false;
 				}
 
@@ -133,6 +140,10 @@ namespace Ruinarch.Modding.Patcher
 				Directory.CreateDirectory(modsDir);
 				File.Copy(harmonySrc, Path.Combine(modsDir, Harmony), overwrite: true);
 				log($"Installed {Harmony} -> Mods/");
+				// The loader reads package DLL metadata with Mono.Cecil before deciding
+				// whether to load them; it resolves from Mods/ like Harmony.
+				File.Copy(cecilSrc, Path.Combine(modsDir, Cecil), overwrite: true);
+				log($"Installed {Cecil} -> Mods/");
 
 				// The content-injection framework (new structures/skills) ships in
 				// Mods/ like Harmony. It is optional: a minimal package may omit it,

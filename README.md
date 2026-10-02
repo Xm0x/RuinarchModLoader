@@ -39,11 +39,15 @@ runtime, so there is nothing else to install.
 > After a game update Steam replaces `Assembly-CSharp.dll`; open the installer
 > again and click **Reinstall**.
 
-The installer also puts two helper DLLs in `Mods/`: `Ruinarch.ModContent.dll`, the
-framework that lets mods add new buildings, skills and villager actions, and `Ruinarch.ModMenu.dll`, which
-replaces the game's Steam Workshop **Mods** window (main menu) with a list of your
-installed mods. From there you can turn each mod on or off (takes effect after a
-restart), read `mods.log`, and open the `Mods/` folder.
+The installer also puts helper DLLs in `Mods/`: `Ruinarch.ModContent.dll`, the
+framework that lets mods add new buildings, skills and villager actions;
+`Mono.Cecil.dll`, which the loader uses to inspect packages before loading them; and
+`Ruinarch.ModMenu.dll`, which replaces the game's **Mods** window (main menu) with a list
+of your packages, local and subscribed on the Steam Workshop. From there you can turn
+each one on or off (takes effect after a restart), see why a package is not compatible,
+browse the Workshop, upload your own package, read `mods.log`, and open the `Mods/`
+folder. Installing, sharing and the Workshop are explained in
+[`docs/PACKAGES.md`](docs/PACKAGES.md).
 
 For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
@@ -77,11 +81,16 @@ static class Character_Death_Patch
 }
 ```
 
-Ship an optional `mod.json` next to your DLL:
+Every mod folder needs a `mod.json` next to your DLL, naming the loader API, the DLL and
+the class above (`MyMod` here, in no namespace):
 
 ```json
-{ "id": "you.mymod", "name": "My Mod", "version": "1.0.0", "author": "you", "description": "..." }
+{ "id": "you.mymod", "name": "My Mod", "version": "1.0.0", "author": "you", "description": "...",
+  "loader": "RuinarchModLoader", "loaderApi": 1, "type": "code",
+  "entryAssembly": "MyMod.dll", "entryType": "MyMod" }
 ```
+
+The loader checks it before loading anything; see [`docs/PACKAGES.md`](docs/PACKAGES.md).
 
 The full API and patterns are in [`docs/WRITING_MODS.md`](docs/WRITING_MODS.md).
 Adding **new content** (new structures, skills and villager actions, sprites, sounds,
@@ -132,8 +141,8 @@ tools/build-gui.sh                          # graphical installer -> build/gui/{
 ```
 
 `build/patcher/` then holds the patcher plus `Ruinarch.Modding.dll`, `0Harmony.dll`,
-`Ruinarch.ModContent.dll` and `Ruinarch.ModMenu.dll`, ready to run or package with
-`tools/package-release.sh`.
+`Mono.Cecil.dll`, `Ruinarch.ModContent.dll` and `Ruinarch.ModMenu.dll`, ready to run or
+package with `tools/package-release.sh`.
 
 Requirements: .NET SDK (8.x) and a legitimate Ruinarch install to reference the
 game's Unity DLLs at build time.

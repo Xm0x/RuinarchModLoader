@@ -18,27 +18,6 @@ namespace Ruinarch.Modding
 		public string Directory { get; internal set; }
 	}
 
-	/// <summary>
-	/// Every mod the loader discovered on disk this session, whether or not it was
-	/// activated. Drives the in-game mod list / manager UI. A mod is "known" if it
-	/// exposes an <see cref="IRuinarchMod"/> entry point or declares itself with a
-	/// <c>mod.json</c>; plain dependency DLLs (0Harmony, resource assemblies) are
-	/// not listed.
-	/// </summary>
-	public sealed class KnownMod
-	{
-		public ModInfo Info { get; internal set; }
-		public string Directory { get; internal set; }
-		public string DllPath { get; internal set; }
-
-		/// <summary>Whether the mod is enabled in <c>modloader.config.json</c>.</summary>
-		public bool Enabled { get; internal set; }
-
-		/// <summary>Whether the mod's <see cref="IRuinarchMod.OnLoad"/> actually ran this session.</summary>
-		public bool Loaded { get; internal set; }
-
-		public string Id => Info != null ? Info.id : null;
-	}
 
 	/// <summary>
 	/// The mod loader. <see cref="Initialize"/> is the single entry point; the
@@ -59,6 +38,10 @@ namespace Ruinarch.Modding
 		private static readonly List<KnownMod> _known = new List<KnownMod>();
 		private static HashSet<string> _disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		private static bool _initialized;
+		private static bool _workshopScanned;
+		private static readonly Dictionary<string, KnownMod> _packageIds = new Dictionary<string, KnownMod>(StringComparer.OrdinalIgnoreCase);
+		private static readonly Dictionary<string, string> _assemblyPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		private static readonly string[] Infrastructure = { "0Harmony", "Mono.Cecil", "Ruinarch.ModContent", "Ruinarch.ModMenu" };
 
 		/// <summary>Absolute path to the <c>Mods/</c> root (set during init).</summary>
 		public static string ModsRoot { get; private set; }
@@ -101,18 +84,12 @@ namespace Ruinarch.Modding
 
 				_disabled = ReadDisabledSet();
 
-				// Let mods resolve their own dependencies from anywhere under Mods/.
 				AppDomain.CurrentDomain.AssemblyResolve += ResolveFromMods;
-
-				Debug.Log($"[ModLoader] Scanning for mods in: {ModsRoot}");
-				List<string> dlls = DiscoverModDlls(ModsRoot);
-				foreach (string dll in dlls)
-				{
-					TryLoad(dll);
-				}
+				ScanLocalPackages();
+				LoadMenu();
 				StartContentFramework();
-				RecordTemplatePacks();
-				Debug.Log($"[ModLoader] Done. {_loaded.Count} of {_known.Count} discovered mod(s) active.");
+				PublishPackDirectories();
+				Debug.Log($"[ModLoader] Local scan complete. {_loaded.Count} code mod(s) active.");
 			}
 			catch (Exception e)
 			{
@@ -138,23 +115,6 @@ namespace Ruinarch.Modding
 			}
 		}
 
-		// A template pack has a mod.json and templates/ but no DLL: list it, so the mod
-		// manager can switch it off (the framework reads the same disabled list).
-		private static void RecordTemplatePacks()
-		{
-			foreach (string dir in System.IO.Directory.GetDirectories(ModsRoot))
-			{
-				string json = Path.Combine(dir, "mod.json");
-				if (!File.Exists(json) || !System.IO.Directory.Exists(Path.Combine(dir, "templates"))
-					|| System.IO.Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly).Length > 0)
-				{
-					continue;
-				}
-				ModInfo info = ModInfo.LoadOrDefault(json, Path.GetFileName(dir));
-				bool enabled = !_disabled.Contains(info.id);
-				RecordKnown(info, dir, null, enabled, loaded: enabled);
-			}
-		}
 
 		private static string ResolveModsRoot()
 		{
@@ -199,121 +159,102 @@ namespace Ruinarch.Modding
 			}
 		}
 
-		/// <summary>
-		/// Candidate DLLs: every <c>*.dll</c> directly in Mods/ plus one level of
-		/// subfolders (<c>Mods/MyMod/MyMod.dll</c>). Non-mod DLLs (dependencies
-		/// like 0Harmony) simply expose no <see cref="IRuinarchMod"/> and are
-		/// skipped after inspection.
-		/// </summary>
-		private static List<string> DiscoverModDlls(string root)
+		private static void ScanLocalPackages()
 		{
-			var result = new List<string>();
-			result.AddRange(System.IO.Directory.GetFiles(root, "*.dll", SearchOption.TopDirectoryOnly));
-			foreach (string dir in System.IO.Directory.GetDirectories(root))
+			PackageInspector.ReserveGameAssemblies(Path.Combine(Application.dataPath, "Managed"));
+			foreach (string dir in System.IO.Directory.GetDirectories(ModsRoot).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
 			{
-				result.AddRange(System.IO.Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly));
+				if (!File.Exists(Path.Combine(dir, "mod.json")) && !System.IO.Directory.Exists(Path.Combine(dir, "templates"))
+					&& System.IO.Directory.GetFiles(dir, "*.dll").Length == 0 && System.IO.Directory.GetFiles(dir, "*.xml").Length == 0) continue;
+				AddPackage(PackageInspector.Inspect(dir));
 			}
-			return result;
+			foreach (string dll in System.IO.Directory.GetFiles(ModsRoot, "*.dll").OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+				if (!Infrastructure.Contains(Path.GetFileNameWithoutExtension(dll), StringComparer.OrdinalIgnoreCase))
+					_known.Add(new KnownMod { Directory = ModsRoot, DllPath = dll, Info = new ModInfo { id = Path.GetFileNameWithoutExtension(dll), name = Path.GetFileName(dll), version = "0.0.0" }, RejectionReason = "Loose user DLL. Put it in a package folder with an API 1 mod.json." });
+			foreach (KnownMod mod in _known.Where(m => m.Compatible && m.Enabled).ToArray()) Activate(mod);
 		}
 
-		private static void TryLoad(string dllPath)
+		private static void AddPackage(KnownMod mod)
 		{
-			string fileName = Path.GetFileNameWithoutExtension(dllPath);
-			string dir = Path.GetDirectoryName(dllPath);
-			string jsonPath = Path.Combine(dir ?? ModsRoot, "mod.json");
-			bool hasJson = File.Exists(jsonPath);
-
-			// Fast path: a mod that ships a mod.json can be identified and skipped
-			// WITHOUT loading its assembly at all when it is disabled.
-			if (hasJson)
+			mod.Enabled = !_disabled.Contains(mod.Id);
+			if (_packageIds.TryGetValue(mod.Id, out KnownMod owner))
 			{
-				ModInfo declared = ModInfo.LoadOrDefault(jsonPath, fileName);
-				if (_disabled.Contains(declared.id))
-				{
-					RecordKnown(declared, dir, dllPath, enabled: false, loaded: false);
-					Debug.Log($"[ModLoader] Skipped disabled mod '{declared.id}' (not loaded).");
-					return;
-				}
+				string where = owner.Origin == ModOrigin.SteamWorkshop ? "Steam Workshop item " + owner.WorkshopId : "local folder " + Path.GetFileName(owner.Directory);
+				mod.RejectionReason = $"Duplicate package id {mod.Id}: the {where} already uses it (local copies win over Workshop items).";
 			}
+			else _packageIds.Add(mod.Id, mod);
+			if (mod.Compatible && mod.Enabled)
+			{
+				string collision = mod.Assemblies.Keys.FirstOrDefault(name => _assemblyPaths.ContainsKey(name));
+				if (collision != null) mod.RejectionReason = "Assembly name already provided by another enabled package: " + collision;
+				else foreach (var assembly in mod.Assemblies) _assemblyPaths.Add(assembly.Key, assembly.Value);
+			}
+			_known.Add(mod);
+			if (!mod.Compatible) Debug.LogWarning($"[ModLoader] Not compatible with RuinarchModLoader: {mod.Id}: {mod.RejectionReason}");
+			else if (!mod.Enabled) Debug.Log($"[ModLoader] Skipped disabled package '{mod.Id}' without loading code.");
+		}
 
-			Assembly assembly;
+		/// <summary>Called once by the Steam bridge after native Steam initialization.
+		/// Local IDs already reserve precedence. Updates and unsubscribes require restart.</summary>
+		public static void LoadWorkshopPackages(IReadOnlyDictionary<ulong, string> installedFolders)
+		{
+			if (_workshopScanned) return;
+			_workshopScanned = true;
+			var added = new List<KnownMod>();
+			foreach (var item in installedFolders.OrderBy(i => i.Key))
+			{
+				KnownMod mod = PackageInspector.Inspect(item.Value);
+				mod.Origin = ModOrigin.SteamWorkshop; mod.WorkshopId = item.Key;
+				AddPackage(mod); added.Add(mod);
+			}
+			foreach (KnownMod mod in added.Where(m => m.Compatible && m.Enabled)) Activate(mod);
+			PublishPackDirectories();
+			Debug.Log($"[ModLoader] Workshop scan complete: {added.Count} installed subscribed item(s).");
+		}
+
+		private static void Activate(KnownMod mod)
+		{
+			if (mod.Info.type == "templates") { mod.Loaded = true; return; }
 			try
 			{
-				assembly = Assembly.LoadFrom(dllPath);
+				Assembly assembly = Assembly.LoadFrom(mod.DllPath);
+				Type entry = assembly.GetType(mod.Info.entryType, throwOnError: true);
+				var logger = new ModLogger(mod.Id, LogFile);
+				var instance = (IRuinarchMod)Activator.CreateInstance(entry);
+				instance.OnLoad(new ModContext(mod.Info, mod.Directory, ModsRoot, logger));
+				_loaded.Add(new LoadedMod { Info = mod.Info, Assembly = assembly, Instance = instance, Directory = mod.Directory });
+				mod.Loaded = true;
+				Debug.Log($"[ModLoader] Loaded {mod.Info} ({mod.Origin}).");
 			}
 			catch (Exception e)
 			{
-				Debug.LogWarning($"[ModLoader] Could not load '{Path.GetFileName(dllPath)}': {e.Message}");
-				return;
-			}
-
-			// Already processed this assembly (e.g. a shared dependency)?
-			if (_loaded.Any(m => m.Assembly == assembly))
-			{
-				return;
-			}
-
-			Type[] types = SafeGetTypes(assembly);
-			Type entryType = types.FirstOrDefault(t =>
-				t != null && !t.IsAbstract && !t.IsInterface && typeof(IRuinarchMod).IsAssignableFrom(t));
-
-			if (entryType == null)
-			{
-				// Not a mod (dependency DLL, resource assembly, etc.) - fine.
-				return;
-			}
-
-			ModInfo info = ModInfo.LoadOrDefault(jsonPath, fileName);
-
-			// A mod with no mod.json still honors the disabled list by its fallback id.
-			if (_disabled.Contains(info.id))
-			{
-				RecordKnown(info, dir, dllPath, enabled: false, loaded: false);
-				Debug.Log($"[ModLoader] Discovered disabled mod '{info.id}'; OnLoad skipped.");
-				return;
-			}
-
-			try
-			{
-				var logger = new ModLogger(info.id, LogFile);
-				var context = new ModContext(info, dir, ModsRoot, logger);
-
-				var instance = (IRuinarchMod)Activator.CreateInstance(entryType);
-				instance.OnLoad(context);
-
-				_loaded.Add(new LoadedMod
-				{
-					Info = info,
-					Assembly = assembly,
-					Instance = instance,
-					Directory = dir
-				});
-				RecordKnown(info, dir, dllPath, enabled: true, loaded: true);
-				Debug.Log($"[ModLoader] Loaded {info}");
-			}
-			catch (Exception e)
-			{
-				RecordKnown(info, dir, dllPath, enabled: true, loaded: false);
-				Debug.LogError($"[ModLoader] Mod '{fileName}' failed in OnLoad and was skipped: {e}");
+				mod.FailureReason = e.GetBaseException().Message;
+				Debug.LogError($"[ModLoader] Package '{mod.Id}' failed during activation: {e}");
 			}
 		}
 
-		private static void RecordKnown(ModInfo info, string dir, string dllPath, bool enabled, bool loaded)
+		private static void LoadMenu()
 		{
-			KnownMod existing = _known.FirstOrDefault(k => k.Id == info.id);
-			if (existing != null)
+			string dll = Path.Combine(ModsRoot, "Ruinarch.ModMenu.dll");
+			if (!File.Exists(dll)) return;
+			var menu = new KnownMod
 			{
-				existing.Loaded |= loaded;
-				return;
+				Directory = ModsRoot, DllPath = dll, Enabled = true, Origin = ModOrigin.Infrastructure,
+				Info = new ModInfo { id = "Ruinarch.ModMenu", name = "Mod manager", version = "1.0.0", author = "RuinarchModLoader", type = "code", entryType = "Ruinarch.ModMenu.ModMenuMod" }
+			};
+			_known.Add(menu); Activate(menu);
+		}
+
+		private static void PublishPackDirectories()
+		{
+			try
+			{
+				string[] directories = _known.Where(m => m.Compatible && m.Enabled && m.Loaded && m.Origin != ModOrigin.Infrastructure
+					&& System.IO.Directory.Exists(Path.Combine(m.Directory, "templates"))).Select(m => m.Directory).ToArray();
+				Assembly framework = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => SafeName(a) == "Ruinarch.ModContent");
+				framework?.GetType("Ruinarch.ModContent.Templates.ModTemplates")?.GetMethod("SetPackDirectories")?.Invoke(null, new object[] { directories });
 			}
-			_known.Add(new KnownMod
-			{
-				Info = info,
-				Directory = dir,
-				DllPath = dllPath,
-				Enabled = enabled,
-				Loaded = loaded
-			});
+			catch (Exception e) { Debug.LogWarning("[ModLoader] Template directory handoff failed: " + e.GetBaseException().Message); }
 		}
 
 		/// <summary>
@@ -338,11 +279,7 @@ namespace Ruinarch.Modding
 			}
 			WriteDisabledSet();
 
-			KnownMod km = _known.FirstOrDefault(k => k.Id == id);
-			if (km != null)
-			{
-				km.Enabled = enabled;
-			}
+			foreach (KnownMod km in _known.Where(k => k.Id == id && k.Compatible)) km.Enabled = enabled;
 		}
 
 		/// <summary>Whether a mod id is currently enabled (not in the disabled list).</summary>
@@ -401,21 +338,6 @@ namespace Ruinarch.Modding
 			}
 		}
 
-		private static Type[] SafeGetTypes(Assembly assembly)
-		{
-			try
-			{
-				return assembly.GetTypes();
-			}
-			catch (ReflectionTypeLoadException ex)
-			{
-				return ex.Types.Where(t => t != null).ToArray();
-			}
-			catch
-			{
-				return Array.Empty<Type>();
-			}
-		}
 
 		// An assembly's simple name, or null. Runtime-generated (dynamic) assemblies are
 		// skipped, and one whose name cannot be read is passed over: in a test run, Mono threw
@@ -451,14 +373,13 @@ namespace Ruinarch.Modding
 					return existing;
 				}
 
-				if (string.IsNullOrEmpty(ModsRoot) || !System.IO.Directory.Exists(ModsRoot))
+				if (_assemblyPaths.TryGetValue(simpleName, out string packageDll)) return Assembly.LoadFrom(packageDll);
+				if (ModsRoot != null && Infrastructure.Contains(simpleName, StringComparer.OrdinalIgnoreCase))
 				{
-					return null;
+					string path = Path.Combine(ModsRoot, simpleName + ".dll");
+					if (File.Exists(path)) return Assembly.LoadFrom(path);
 				}
-				string match = System.IO.Directory
-					.GetFiles(ModsRoot, simpleName + ".dll", SearchOption.AllDirectories)
-					.FirstOrDefault();
-				return match != null ? Assembly.LoadFrom(match) : null;
+				return null;
 			}
 			catch
 			{

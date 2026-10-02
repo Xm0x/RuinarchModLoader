@@ -368,14 +368,15 @@ runs it on every mod it builds and refuses to deploy a mod that fails.
 ## Shipping and installation
 
 The framework ships as `Ruinarch.ModContent.dll` placed in the game's `Mods/`
-folder, alongside `0Harmony.dll`, the same way any shared mod dependency is
-shipped (the loader resolves dependencies by simple name across the whole
-`Mods/` tree). It needs nothing from the loader: it self-installs its Harmony
-patches the first time any mod touches the API, which happens during mod load,
-before the game builds its skill and structure tables. The loader also starts it
-(by reflection) once every mod has loaded, so template packs work with no code
-mod installed. `Install()` is idempotent, so calling the register methods or
-`Install()` more than once is safe and order-independent.
+folder, alongside `0Harmony.dll`; the loader resolves it for every mod. The framework
+has no compile-time reference to the loader: it self-installs its Harmony patches the
+first time any mod touches the API, which happens during mod load, before the game
+builds its skill and structure tables. The loader also starts it (by reflection) once
+every local mod has loaded, so template packs work with no code mod installed, and hands
+it the folders of the template packages it accepted (`ModTemplates.SetPackDirectories`,
+local and Steam Workshop, compatible and switched on). The framework never scans for
+packs itself. `Install()` is idempotent, so calling the register methods or `Install()`
+more than once is safe and order-independent.
 
 ## Building templates
 

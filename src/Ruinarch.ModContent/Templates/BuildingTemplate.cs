@@ -66,6 +66,8 @@ namespace Ruinarch.ModContent.Templates
 	{
 		public float[] pos;
 		public float rot;
+		/// <summary>Optional stock wall layout: prefab name plus '#' and wall index.</summary>
+		public string layout;
 		public List<string> sprites = new List<string>();
 	}
 

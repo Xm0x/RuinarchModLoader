@@ -59,12 +59,15 @@ namespace Ruinarch.ModContent.Templates
 			t.floor = Encode(ground, t, keys);
 			t.detail = Encode(detail, t, keys);
 			t.walls = Encode(walls, t, keys);
-			foreach (ThinWallGameObject w in prefab.GetComponentsInChildren<ThinWallGameObject>(true))
+			ThinWallGameObject[] thinWalls = prefab.GetComponentsInChildren<ThinWallGameObject>(true);
+			for (int index = 0; index < thinWalls.Length; index++)
 			{
+				ThinWallGameObject w = thinWalls[index];
 				t.thinWalls.Add(new TemplateThinWall
 				{
 					pos = Pos(lso, w.transform),
 					rot = R(w.transform.localEulerAngles.z),
+					layout = w.GetComponent<TemplateWallLayout>()?.Source ?? prefab.name + "#" + index,
 					sprites = w.GetComponentsInChildren<SpriteRenderer>(true).Select(s => TemplatePalette.NameOf(s.sprite)).ToList(),
 				});
 			}

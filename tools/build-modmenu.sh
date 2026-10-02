@@ -31,6 +31,7 @@ rsp="$(mktemp)"
   for dll in "$RUIN_MANAGED_DIR"/*.dll; do echo "-r:$dll"; done
   echo "-r:$MOD_LIB_DIR/0Harmony.dll"
   echo "-r:$MOD_BUILD_DIR/Ruinarch.Modding.dll"
+  echo "-r:$MOD_BUILD_DIR/Ruinarch.ModContent.dll"
   find "$MOD_PROJECT_DIR/src/Ruinarch.ModMenu" -name '*.cs' -print
 } > "$rsp"
 dotnet "$CSC" "@$rsp" || { echo "mod menu build FAILED" >&2; rm -f "$rsp"; exit 1; }

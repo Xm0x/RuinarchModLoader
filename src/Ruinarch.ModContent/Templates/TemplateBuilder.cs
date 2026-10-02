@@ -190,7 +190,7 @@ namespace Ruinarch.ModContent.Templates
 			Transform parent = old.Length > 0 ? old[0].transform.parent : lso.transform;
 			// Pieces have different child layouts (plain wall, corner, decoration). Keep a
 			// matching layout instead of cloning the first piece for every wall.
-			SpriteRenderer[][] layouts = old.Select(w => w.GetComponentsInChildren<SpriteRenderer>(true)).ToArray();
+			SpriteRenderer[][] layouts = t.thinWalls.Any(w => w.layout == null) ? old.Select(w => w.GetComponentsInChildren<SpriteRenderer>(true)).ToArray() : new SpriteRenderer[0][];
 			GameObject fallback = TemplatePalette.ThinWallPrototype;
 			try
 			{
@@ -201,7 +201,7 @@ namespace Ruinarch.ModContent.Templates
 				foreach (TemplateThinWall w in t.thinWalls)
 				{
 					int match = -1;
-					for (int i = 0; i < layouts.Length; i++)
+					for (int i = 0; w.layout == null && i < layouts.Length; i++)
 					{
 						if (layouts[i].Length != w.sprites.Count)
 						{
@@ -226,7 +226,19 @@ namespace Ruinarch.ModContent.Templates
 							break;
 						}
 					}
-					GameObject go = Object.Instantiate(match >= 0 ? old[match].gameObject : fallback, parent);
+					GameObject prototype;
+					if (w.layout != null)
+					{
+						if (!TemplatePalette.ThinWallLayouts.TryGetValue(w.layout, out prototype))
+							throw new TemplateException("unknown thin-wall layout " + w.layout);
+					}
+					else prototype = match >= 0 ? old[match].gameObject : fallback;
+					GameObject go = Object.Instantiate(prototype, parent);
+					if (w.layout != null)
+					{
+						var metadata = go.GetComponent<TemplateWallLayout>() ?? go.AddComponent<TemplateWallLayout>();
+						metadata.Source = w.layout;
+					}
 					SpriteRenderer[] renderers = go.GetComponentsInChildren<SpriteRenderer>(true);
 					if (renderers.Length != w.sprites.Count)
 					{
@@ -234,6 +246,9 @@ namespace Ruinarch.ModContent.Templates
 					}
 					for (int i = 0; i < renderers.Length; i++)
 					{
+						// Sprite names such as "horizontal" repeat across materials. An unchanged
+						// exported layout already owns the exact stock sprite; retain that asset.
+						if (w.layout != null && TemplatePalette.NameOf(renderers[i].sprite) == w.sprites[i]) continue;
 						renderers[i].sprite = w.sprites[i] == null ? null : TemplatePalette.Sprite(w.sprites[i], packDirectory) ?? throw new TemplateException("unknown thin-wall sprite " + w.sprites[i]);
 					}
 					Place(lso, go.transform, w.pos, w.rot);

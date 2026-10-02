@@ -19,6 +19,7 @@ namespace Ruinarch.ModContent.Templates
 		private static readonly Dictionary<string, Tile> ArtTiles = new Dictionary<string, Tile>();
 		internal static GameObject ObjectPrototype;
 		internal static GameObject ThinWallPrototype;
+		internal static readonly Dictionary<string, GameObject> ThinWallLayouts = new Dictionary<string, GameObject>();
 		internal static GameObject ConnectorPrototype;
 		internal static float TilePixelsPerUnit = 64f;
 		private static bool _gathered;
@@ -37,6 +38,8 @@ namespace Ruinarch.ModContent.Templates
 			foreach (GameLook look in TemplateCatalogue.Looks())
 			{
 				GameObject prefab = look.Prefab;
+				ThinWallGameObject[] walls = prefab.GetComponentsInChildren<ThinWallGameObject>(true);
+				for (int i = 0; i < walls.Length; i++) ThinWallLayouts[prefab.name + "#" + i] = walls[i].gameObject;
 				foreach (Tilemap tm in prefab.GetComponentsInChildren<Tilemap>(true))
 				{
 					foreach (Vector3Int p in tm.cellBounds.allPositionsWithin)

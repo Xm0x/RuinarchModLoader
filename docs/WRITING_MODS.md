@@ -5,8 +5,9 @@ Everything a mod needs lives in the `Ruinarch.Modding` namespace, plus
 
 ## The entry point: `IRuinarchMod`
 
-Implement it on exactly one public, parameterless-constructible class. The loader
-finds it, instantiates it, and calls `OnLoad` once, before the first scene loads.
+Implement it on exactly one public, parameterless-constructible class and name that class
+in `mod.json` (below). The loader instantiates it and calls `OnLoad` once, before the
+first scene loads.
 
 ```csharp
 public interface IRuinarchMod
@@ -23,8 +24,8 @@ other mods.
 ```csharp
 public sealed class ModContext
 {
-    public ModInfo   Info         { get; } // metadata from mod.json (or defaults)
-    public string    ModDirectory { get; } // absolute path this DLL loaded from
+    public ModInfo   Info         { get; } // metadata from mod.json
+    public string    ModDirectory { get; } // absolute path of your package folder
     public string    ModsRoot     { get; } // absolute path to Mods/
     public ModLogger Logger       { get; } // scoped logger
 }
@@ -32,8 +33,9 @@ public sealed class ModContext
 
 ## Metadata: `mod.json`
 
-Optional, placed next to your DLL. Missing fields fall back to defaults derived
-from the DLL name. Parsed with Unity's `JsonUtility`, so no extra dependency.
+Required, in your package folder next to your DLL. The loader reads it, and your DLL's
+metadata, before loading any code; a package with a missing or wrong manifest is shown as
+not compatible and never loaded.
 
 ```json
 {
@@ -41,12 +43,18 @@ from the DLL name. Parsed with Unity's `JsonUtility`, so no extra dependency.
   "name": "My Mod",
   "version": "1.0.0",
   "author": "you",
-  "description": "what it does"
+  "description": "what it does",
+  "loader": "RuinarchModLoader",
+  "loaderApi": 1,
+  "type": "code",
+  "entryAssembly": "MyMod.dll",
+  "entryType": "MyNamespace.MyMod"
 }
 ```
 
-`Info.id` is a good argument for `new Harmony(id)`, so each mod's patches are
-grouped under a unique owner.
+Every field and check is described in [PACKAGES.md](PACKAGES.md), along with sharing
+your mod on the Steam Workshop. `Info.id` is a good argument for `new Harmony(id)`, so
+each mod's patches are grouped under a unique owner.
 
 ## Logging: `ModLogger`
 
@@ -95,9 +103,11 @@ normally. If you ever need a tiny method to be patchable, mark it
 
 ## Dependencies
 
-Drop any extra DLL your mod needs anywhere under `Mods/`. The loader's
-`AssemblyResolve` hook finds dependencies by simple name across the whole `Mods/`
-tree, so a shared library in `Mods/` or in your mod's subfolder both resolve.
+`0Harmony.dll` and `Ruinarch.ModContent.dll` are shared and always available. Any other
+DLL your mod needs goes in your package folder and is listed in `mod.json`:
+`"dependencies": ["lib/MyLibrary.dll"]`. The loader resolves dependencies only from
+accepted, enabled packages; a package may not ship a copy of a game, Unity, .NET or loader
+assembly.
 
 ## Building
 

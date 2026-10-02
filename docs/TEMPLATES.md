@@ -6,7 +6,7 @@ then uses each template as one more look for its kind of building, next to its o
 pack needs no code and no Unity editor.
 
 Templates change layouts, not gameplay rules. A new building kind still needs a code mod.
-This stage uses JSON authoring; the visual layout editor is not implemented yet.
+The main-menu **Editor** creates and edits templates without external tools.
 
 ## Availability
 
@@ -16,15 +16,57 @@ feature, [build and install from source](../README.md#build-from-source).
 ## A pack
 
     Mods/MyBuildings/
-      mod.json            {"id": "mybuildings", "name": "My Buildings", "version": "1.0.0"}
+      mod.json            see below
       templates/*.json    one template per file
       art/*.png           your own tiles and sprites (optional)
+
+A template pack's `mod.json`:
+
+```json
+{ "id": "mybuildings", "name": "My Buildings", "version": "1.0.0",
+  "loader": "RuinarchModLoader", "loaderApi": 1, "type": "templates" }
+```
+
+A template pack contains no DLLs. The editor's **Create pack** writes this for you.
 
 Every template id starts with the pack id and a slash: `mybuildings/stone-tavern`. The id
 is stored in save files, so do not change it once players use the pack. A save made with a
 pack still loads without it: those buildings take the look they were based on.
 
-Switch a pack off in the in-game mod manager like any mod.
+Switch a pack off in the in-game Mods window like any mod. Packs can be shared on the
+Steam Workshop; subscribed packs are used like local ones, and the editor lets you copy
+their templates into your own pack (it never edits them in place). See
+[PACKAGES.md](PACKAGES.md).
+
+## Visual editor
+
+Open **Editor** from the main menu. On the first visit it briefly loads the game's
+building assets, without generating a world. Create or select a local pack, then open
+a template or choose **New from existing / New blank**. Filter the source browser by
+kind, culture, material or prefab name. A blank building still borrows a real building
+for its hidden runtime settings.
+
+The workspace has paint, erase, connected fill, rectangle and picker tools. Choose a
+layer and a thumbnail from the source-grouped palette. Clear the source filter to use
+another building's art; pack PNGs are always available. Thin-wall brushes retain their
+native edge, corners and decoration. **Rotate 90 degrees** rotates wall/furniture pieces.
+Right or middle drag pans; scroll zooms around the pointer; **Fit** restores the overview.
+Each layer and the grid can be hidden independently.
+
+Undo/redo operate on complete strokes, fills, resizes and property edits. Shortcuts:
+Ctrl+S saves, Ctrl+Z undoes, Ctrl+Y redoes (not while typing in a field). Resize keeps
+the lower-left cell origin and clips content outside the new bounds. Floor edits
+recompute the footprint. Live checks report missing entrances, disconnected floor,
+off-floor furniture, wrong wall tiles and unknown tiles. **Save** permits warnings,
+but structurally invalid documents never overwrite the previous file. **Packs** and
+**Back** prompt for unsaved changes.
+
+**Test** saves and generates a small disposable world through the game's normal startup
+flow. Village looks are placed in a matching village; special looks go into free
+wilderness. The camera centers on the result. The overlay reports native walking paths
+from a village center to entrances, floor cells and furniture access cells. Failures
+remain visible. **Place again** uses another free footprint. **Back to editor** returns
+to the same saved draft. The test world is paused and is not a saved campaign.
 
 ## Start from a game building
 
@@ -36,8 +78,10 @@ the RuinarchDebug harness) can export one:
 
 `ModTemplates.GameLooks()` lists every game building (kind, culture, material, prefab).
 
-These APIs are in `Ruinarch.ModContent.Templates`. Call them after a world has loaded,
-not from `OnLoad` or the main menu, where the game's building catalogue is unavailable.
+These APIs are in `Ruinarch.ModContent.Templates`. In a live world they are immediately
+available. At the menu, first run `TemplateAuthoring.Prepare()` as a Unity coroutine;
+it indexes stock assets without generating a world. Registration and pack loading
+still require a live game scene and must not run from `OnLoad`.
 
 To export examples with the development harness, build and deploy `RuinarchDebug` from
 the RuinarchMods repository, then run `tools/run-autotest.sh 1200 TemplateSuite` from the
@@ -60,7 +104,7 @@ loader checkout. It writes `template-<prefab name>.json` files into
 | `bounds` | `[x, y, w, h]`: the area the layers cover, in the building's own cells. |
 | `palette` | One character per tile: `"a": "game:<tile name>"` or `"b": "art:file.png"`. |
 | `floor`, `detail`, `walls` | Rows of palette characters, top row first, `.` for empty. The floor is the footprint. Wall tiles become solid walls. |
-| `thinWalls` | Thin wall pieces: `pos` `[x, y, z]`, `rot`, `sprites`. |
+| `thinWalls` | Thin wall pieces: `pos` `[x, y, z]`, `rot`, `sprites`, optional `layout` (`prefab name#wall index`) preserving the native edge, collider and child geometry. Export/editor writes it automatically. |
 | `objects` | Furniture: `type` (a TILE_OBJECT_TYPE, e.g. `BED`), `pos`, `rot`, `sprite` (`game:` or `art:`). |
 | `entrances` | Where paths meet the building: `pos`. |
 | `lightSpots` | Ward light positions: `pos`. |
@@ -69,6 +113,9 @@ loader checkout. It writes `template-<prefab name>.json` files into
 | `clickBox` | Overrides an existing native collider (`offset`, `size`); if omitted, that collider fits the footprint. Prefabs without one keep using the game's tile-based selection. |
 
 Positions are in the building's own units: one unit is one tile.
+Tilemap cells and prefab-local object positions can have different origins in stock
+buildings. The editor converts between them; do not assume furniture coordinates
+equal floor cell indices.
 
 ## Cultures
 
@@ -94,6 +141,8 @@ A template that cannot be used is skipped, and `Mods/mods.log` says which file a
 
     [WARN] [ModContent] Template mybuildings/tavern.json: unknown tile game:Floor_Wodo; skipped.
 
-At startup, `mods.log` lists what loaded:
+At startup, `mods.log` lists what loaded. Only packs the loader accepted (compatible and
+switched on, local or Workshop) are counted; the Mods window shows why any other pack
+was not loaded:
 
-    [INFO] [ModContent] Template packs: 2 found (0 switched off), 5 template(s) loaded, 1 skipped.
+    [INFO] [ModContent] Template packs: 2 accepted by the loader, 5 template(s) loaded, 1 skipped.
