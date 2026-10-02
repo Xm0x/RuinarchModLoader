@@ -65,6 +65,21 @@ namespace Ruinarch.ModMenu.Editor
 		{
 			return System.IO.Directory.GetFiles(Path.Combine(pack.Directory, "templates"), "*.json").OrderBy(f => f);
 		}
+		/// <summary>Deletes a local template pack folder. Packages that ship code are left alone:
+		/// the editor only removes what it can create.</summary>
+		internal static void DeletePack(EditorPack pack)
+		{
+			if (pack.ReadOnly) throw new TemplateException("Unsubscribe in Steam to remove a Workshop pack.");
+			var manifest = JObject.Parse(File.ReadAllText(Path.Combine(pack.Directory, "mod.json")));
+			if ((string)manifest["type"] != "templates" || System.IO.Directory.GetFiles(pack.Directory, "*.dll", SearchOption.AllDirectories).Length > 0)
+				throw new TemplateException(pack.Name + " is a code mod. Remove it from the Mods folder yourself.");
+			System.IO.Directory.Delete(pack.Directory, true);
+		}
+		internal static void DeleteTemplate(EditorPack pack, string file)
+		{
+			if (pack.ReadOnly) throw new TemplateException("Workshop packs are read-only.");
+			File.Delete(file);
+		}
 		internal static string NewId(EditorPack pack, string name)
 		{
 			string slug = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9._-]+", "-").Trim('-'); if (slug.Length == 0) slug = "building";

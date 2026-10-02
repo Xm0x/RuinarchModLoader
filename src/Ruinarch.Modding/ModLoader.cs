@@ -177,11 +177,7 @@ namespace Ruinarch.Modding
 		private static void AddPackage(KnownMod mod)
 		{
 			mod.Enabled = !_disabled.Contains(mod.Id);
-			if (_packageIds.TryGetValue(mod.Id, out KnownMod owner))
-			{
-				string where = owner.Origin == ModOrigin.SteamWorkshop ? "Steam Workshop item " + owner.WorkshopId : "local folder " + Path.GetFileName(owner.Directory);
-				mod.RejectionReason = $"Duplicate package id {mod.Id}: the {where} already uses it (local copies win over Workshop items).";
-			}
+			if (_packageIds.TryGetValue(mod.Id, out KnownMod owner)) mod.RejectionReason = DuplicateReason(mod.Id, owner);
 			else _packageIds.Add(mod.Id, mod);
 			if (mod.Compatible && mod.Enabled)
 			{
@@ -210,6 +206,32 @@ namespace Ruinarch.Modding
 			foreach (KnownMod mod in added.Where(m => m.Compatible && m.Enabled)) Activate(mod);
 			PublishPackDirectories();
 			Debug.Log($"[ModLoader] Workshop scan complete: {added.Count} installed subscribed item(s).");
+		}
+
+		/// <summary>Lists subscribed Workshop items that finished installing after startup. They are
+		/// checked like any package but never load in this session: code and templates load at startup.
+		/// Returns the newly listed items; already listed ones are skipped.</summary>
+		public static IReadOnlyList<KnownMod> AddLateWorkshopPackages(IReadOnlyDictionary<ulong, string> installedFolders)
+		{
+			var added = new List<KnownMod>();
+			if (!_workshopScanned) return added;
+			foreach (var item in installedFolders.OrderBy(i => i.Key))
+			{
+				if (_known.Any(k => k.Origin == ModOrigin.SteamWorkshop && k.WorkshopId == item.Key)) continue;
+				KnownMod mod = PackageInspector.Inspect(item.Value);
+				mod.Origin = ModOrigin.SteamWorkshop; mod.WorkshopId = item.Key;
+				mod.Enabled = !_disabled.Contains(mod.Id);
+				if (_packageIds.TryGetValue(mod.Id, out KnownMod owner)) mod.RejectionReason = DuplicateReason(mod.Id, owner);
+				_known.Add(mod); added.Add(mod);
+				Debug.Log($"[ModLoader] Workshop item {item.Key} ({mod.Id}) installed during play; it is checked again at the next launch.");
+			}
+			return added;
+		}
+
+		private static string DuplicateReason(string id, KnownMod owner)
+		{
+			string where = owner.Origin == ModOrigin.SteamWorkshop ? "Steam Workshop item " + owner.WorkshopId : "local folder " + Path.GetFileName(owner.Directory);
+			return $"Duplicate package id {id}: the {where} already uses it (local copies win over Workshop items).";
 		}
 
 		private static void Activate(KnownMod mod)

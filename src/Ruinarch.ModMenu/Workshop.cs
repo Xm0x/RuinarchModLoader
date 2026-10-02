@@ -19,6 +19,7 @@ namespace Ruinarch.ModMenu
 			try
 			{
 				Workshop.ScanInstalled();
+				Workshop.WatchInstalls();
 			}
 			catch (Exception e)
 			{
@@ -52,7 +53,38 @@ namespace Ruinarch.ModMenu
 				ModMenuMod.Log?.Info("Steam is not available; Workshop packages were not scanned.");
 				return;
 			}
-			uint count = SteamUGC.GetNumSubscribedItems();
+			var folders = InstalledFolders(out uint count, out int pending);
+			Pending = pending;
+			ModMenuMod.Log?.Info($"Steam Workshop: {count} subscribed item(s), {folders.Count} installed, {Pending} still downloading or updating (restart once Steam finishes).");
+			ModLoader.LoadWorkshopPackages(folders);
+		}
+
+		// Items subscribed while the game runs: Steam announces each finished download.
+		// Created once; Steam calls back into it for the rest of the session.
+		private static Steamworks.Callback<ItemInstalled_t> _installed;
+
+		internal static void WatchInstalls()
+		{
+			if (!Ready || _installed != null) return;
+			_installed = Steamworks.Callback<ItemInstalled_t>.Create(e =>
+			{
+				if (e.m_unAppID.m_AppId == AppId) ModMenuView.RefreshList();
+			});
+		}
+
+		/// <summary>Adds subscribed items that finished installing after startup to the list.
+		/// They are checked like any package and load on the next launch.</summary>
+		internal static void ScanLate()
+		{
+			if (!Ready) return;
+			foreach (KnownMod mod in ModLoader.AddLateWorkshopPackages(InstalledFolders(out uint _, out int _)))
+				ModMenuMod.Log?.Info($"Steam Workshop item {mod.WorkshopId} ({mod.Id}) installed; it loads the next time you start the game.");
+		}
+
+		private static Dictionary<ulong, string> InstalledFolders(out uint count, out int pending)
+		{
+			count = SteamUGC.GetNumSubscribedItems();
+			pending = 0;
 			var ids = new PublishedFileId_t[count];
 			if (count > 0) SteamUGC.GetSubscribedItems(ids, count);
 			var folders = new Dictionary<ulong, string>();
@@ -62,7 +94,7 @@ namespace Ruinarch.ModMenu
 				bool busy = (state & (EItemState.k_EItemStateDownloading | EItemState.k_EItemStateDownloadPending)) != 0;
 				if ((state & EItemState.k_EItemStateInstalled) == 0 || busy)
 				{
-					Pending++;
+					pending++;
 					continue;
 				}
 				if (SteamUGC.GetItemInstallInfo(id, out ulong _, out string folder, 1024, out uint _) && Directory.Exists(folder))
@@ -70,8 +102,7 @@ namespace Ruinarch.ModMenu
 					folders[id.m_PublishedFileId] = folder;
 				}
 			}
-			ModMenuMod.Log?.Info($"Steam Workshop: {count} subscribed item(s), {folders.Count} installed, {Pending} still downloading or updating (restart once Steam finishes).");
-			ModLoader.LoadWorkshopPackages(folders);
+			return folders;
 		}
 
 		internal static void Browse()
@@ -162,7 +193,6 @@ namespace Ruinarch.ModMenu
 			}
 			ItemId = result.m_nPublishedFileId.m_PublishedFileId;
 			ModMenuMod.Log?.Info($"Created Workshop item {ItemId} for '{_package.Id}'.");
-			if (result.m_bUserNeedsToAcceptWorkshopLegalAgreement) Workshop.OpenItem(ItemId);
 			Submit();
 		}
 
@@ -198,7 +228,7 @@ namespace Ruinarch.ModMenu
 				? " Accept the Steam Workshop legal agreement on the item page before others can see it." : "";
 			ModMenuMod.Log?.Info($"Uploaded '{_package.Id}' v{_package.Info.version} to Workshop item {ItemId}.");
 			Finish($"Uploaded to Workshop item {ItemId}.{legal}", true);
-			if (legal.Length > 0) Workshop.OpenItem(ItemId);
+			Workshop.OpenItem(ItemId);
 		}
 
 		private void Finish(string message, bool ok)

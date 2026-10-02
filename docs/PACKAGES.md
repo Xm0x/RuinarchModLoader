@@ -97,13 +97,14 @@ rights as the game, like any mod. Install code only from authors you trust.
   its id, so a Workshop copy of it does not take over.
 - Packages load once per game start. Switching packages on or off, subscribing,
   unsubscribing, and Workshop downloads or updates take effect the next time you start the
-  game. Items that Steam is still downloading are skipped until then.
+  game. An item you subscribe to while the game runs appears in the Mods window as soon as
+  Steam has downloaded it, marked to load at the next start.
 
 ## Browsing the Workshop
 
 **Mods -> Browse Workshop** opens the Ruinarch Workshop page (in the Steam overlay when it
-is available, otherwise in the Steam client). Subscribe there, wait until Steam has
-downloaded the item, then restart the game.
+is available, otherwise in the Steam client). Subscribe there; once Steam has downloaded
+the item it shows up in the Mods window and loads the next time you start the game.
 
 In the building editor, templates from Workshop packages appear as sources you can copy
 from (**New from existing**); a Workshop package itself is read-only. The copy goes into
@@ -120,9 +121,9 @@ one of your local packs together with the PNG files it uses.
    - pick the visibility. New items are **Private** unless you choose otherwise; for an
      update, **Keep current visibility** leaves it unchanged;
    - optionally write a change note (the default is `Version <version>`).
-4. Click **Upload**. The panel shows Steam's progress and the final result, including the
-   new item's id. Steam may ask you to accept the Workshop legal agreement on the item's
-   page first; until then only you can see the item.
+4. Click **Upload**. The panel shows Steam's progress and the final result, and the new
+   item's page opens in Steam. Steam may ask you to accept the Workshop legal agreement
+   on that page first; until then only you can see the item.
 
 The package is checked again just before uploading. The whole package folder is uploaded,
 with its `mod.json` title and description and the tag `RuinarchModLoader`. The loader is

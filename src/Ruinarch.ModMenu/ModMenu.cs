@@ -202,11 +202,19 @@ namespace Ruinarch.ModMenu
 			});
 		}
 
-		private static void RefreshList()
+		internal static void RefreshList()
 		{
 			if (_listContainer == null)
 			{
 				return;
+			}
+			try
+			{
+				Workshop.ScanLate();
+			}
+			catch (Exception e)
+			{
+				ModMenuMod.Log?.Warning("Workshop rescan failed: " + e.Message);
 			}
 			for (int i = _listContainer.transform.childCount - 1; i >= 0; i--)
 			{
@@ -317,8 +325,6 @@ namespace Ruinarch.ModMenu
 			var col = EditorUI.Column("Upload", _upload.transform, 20);
 			EditorUI.Rect(col, new Vector2(.12f, .06f), new Vector2(.88f, .94f), Vector2.zero, Vector2.zero);
 			EditorUI.Label(col.transform, "Upload a local package to Steam Workshop", 24);
-			EditorUI.Label(col.transform, "Only compatible local packages are listed, and the package is checked again before upload. " +
-				"RuinarchModLoader itself is never uploaded: players install it separately.", 16).gameObject.GetComponent<LayoutElement>().preferredHeight = 48;
 			Transform list = EditorUI.Scroll(col.transform, "Packages");
 			KnownMod chosen = null;
 			TextMeshProUGUI chosenLabel = null, status = null;
@@ -348,7 +354,7 @@ namespace Ruinarch.ModMenu
 				catch (Exception e) { status.text = e.Message; }
 			});
 			EditorUI.Button(actions, "Close", () => { if (!WorkshopUpload.Busy) { UnityEngine.Object.Destroy(_upload); _upload = null; } else status.text = "Wait for the upload to finish."; });
-			status = EditorUI.Label(col.transform, Workshop.Ready ? "New items are Private unless you choose otherwise." : "Steam is not available; uploading needs the game started through Steam.", 17);
+			status = EditorUI.Label(col.transform, Workshop.Ready ? "" : "Steam is not available. Start the game through Steam to upload.", 17);
 			status.gameObject.GetComponent<LayoutElement>().preferredHeight = 52;
 			_upload.AddComponent<UploadProgress>().Status = status;
 		}

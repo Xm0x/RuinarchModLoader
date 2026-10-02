@@ -76,6 +76,13 @@ namespace Ruinarch.ModMenu.Editor
 			EditorUI.Button(left.transform, "Create pack", () => Guard(() => { EditorPacks.Create(id.text, name.text); StartScreen(); }));
 			EditorUI.Button(right.transform, "New from existing / New blank", () => { if (Pack == null) _status.text = "Select a pack first."; else Browser(Pack); });
 			EditorUI.Button(right.transform, "Open pack folder", () => { if (Pack != null) Application.OpenURL("file://" + Pack.Directory); });
+			EditorUI.Button(right.transform, "Delete pack", () =>
+			{
+				if (Pack == null) { _status.text = "Select a pack first."; return; }
+				EditorPack pack = Pack; int count = EditorPacks.Files(pack).Count();
+				Dialog("Delete " + pack.Name + "?", new[] { ("Delete pack", (Action)(() => Guard(() => { EditorPacks.DeletePack(pack); StartScreen(); _status.text = "Deleted " + pack.Name + "."; }))), ("Cancel", (Action)DismissDialog) },
+					$"The folder and its {count} building(s) are removed for good. Saved games that use them show the original buildings instead.");
+			});
 			_status.text = "Packs add building looks. Code mods add building kinds.";
 		}
 		private static void SelectPack(EditorPack pack, Transform list)
@@ -86,7 +93,11 @@ namespace Ruinarch.ModMenu.Editor
 				string title;
 				try { var t = ModTemplates.FromJson(File.ReadAllText(file)); title = (t.name ?? Path.GetFileNameWithoutExtension(file)) + " / " + t.kind; }
 				catch (Exception e) { title = "! " + Path.GetFileName(file) + ": " + e.Message; }
-				EditorUI.Button(list, title, () => Guard(() => { var t = ModTemplates.FromJson(File.ReadAllText(file)); EditorPacks.CheckShape(t); Edit(pack, new EditorDocument(t)); }));
+				Transform row = EditorUI.Row(list);
+				row.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
+				EditorUI.Button(row, title, () => Guard(() => { var t = ModTemplates.FromJson(File.ReadAllText(file)); EditorPacks.CheckShape(t); Edit(pack, new EditorDocument(t)); }));
+				EditorUI.Button(row, "Delete", () => Dialog("Delete " + title + "?", new[] { ("Delete building", (Action)(() => Guard(() => { EditorPacks.DeleteTemplate(pack, file); SelectPack(pack, list); _status.text = "Deleted " + title + "."; }))), ("Cancel", (Action)DismissDialog) },
+					"The file is removed for good. Saved games that use it show the original building instead."), 90);
 			}
 		}
 		private static void Browser(EditorPack pack)
@@ -142,11 +153,12 @@ namespace Ruinarch.ModMenu.Editor
 			}));
 			EditorUI.Button(actions, "Packs", StartScreen); refresh();
 		}
-		private static void Dialog(string title, IEnumerable<(string label, Action action)> options)
+		private static void Dialog(string title, IEnumerable<(string label, Action action)> options, string detail = null)
 		{
 			DismissDialog(); _dialog = EditorUI.Box("Editor dialog", _root.transform, new Color(0, 0, 0, .85f)); EditorUI.Stretch(_dialog);
 			var col = EditorUI.Column("Choices", _dialog.transform, 24); EditorUI.Rect(col, new Vector2(.3f, .3f), new Vector2(.7f, .7f), Vector2.zero, Vector2.zero);
 			EditorUI.Label(col.transform, title, 22);
+			if (detail != null) EditorUI.Label(col.transform, detail, 17).GetComponent<LayoutElement>().preferredHeight = 58;
 			foreach (var choice in options) EditorUI.Button(col.transform, choice.label, () => { DismissDialog(); choice.action(); });
 		}
 		private static void DismissDialog() { if (_dialog != null) { _dialog.SetActive(false); UnityEngine.Object.Destroy(_dialog); } _dialog = null; }

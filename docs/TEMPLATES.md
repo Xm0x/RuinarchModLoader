@@ -46,6 +46,11 @@ a template or choose **New from existing / New blank**. Filter the source browse
 kind, culture, material or prefab name. A blank building still borrows a real building
 for its hidden runtime settings.
 
+**Delete** next to a template removes its file; **Delete pack** removes a whole template
+pack folder. Both ask first and cannot be undone. Saved games that used a deleted building
+show the building it was based on. The editor never deletes code mods; remove those from
+the `Mods/` folder yourself.
+
 The workspace has paint, erase, connected fill, rectangle and picker tools. Choose a
 layer and a thumbnail from the source-grouped palette. Clear the source filter to use
 another building's art; pack PNGs are always available. Thin-wall brushes retain their

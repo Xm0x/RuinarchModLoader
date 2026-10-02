@@ -38,7 +38,7 @@ Paths are relative to the package root, cannot traverse outside it, and cannot p
 
 ## Discovery and precedence
 
-Local folders are validated during loader bootstrap. Workshop discovery runs once after the game's Steam API initializes and before world creation. Only subscribed, fully installed items are candidates. Pending downloads need a game restart after Steam finishes them.
+Local folders are validated during loader bootstrap. Workshop discovery runs once after the game's Steam API initializes and before world creation. Only subscribed, fully installed items are candidates. Items that finish installing later (Steam `ItemInstalled_t`, or found when the Mods window opens or refreshes) are validated and listed with a restart state, but never activated in that session.
 
 The same validator and activation path handle both origins. A local package reserves its ID even when disabled. Local copies win over Workshop copies; deterministic first discovery wins between same-origin duplicates. Losing rows stay visible with their origin and duplicate reason. Disabled packages never load their assemblies or register their templates.
 
@@ -48,6 +48,6 @@ Unsubscribes, downloads and updates apply on the next game launch. The mod manag
 
 ## Browse, subscribe and upload
 
-The Mods window opens Steam's Workshop browser for Ruinarch (app 909320). Subscribing there uses Steam's normal download flow; restart once installed.
+The Mods window opens Steam's Workshop browser for Ruinarch (app 909320). Subscribing there uses Steam's normal download flow; the item is listed once installed and loads on the next launch.
 
-Upload selects a compatible local package. It reruns validation before creating/submitting an item, supplies the package directory, title, description and `RuinarchModLoader` tag through the game's SteamUGC binding, and shows the actual asynchronous Steam result. New uploads default to Private. Public/Friends visibility must be selected explicitly. An existing numeric item ID updates an owned item; blank creates a new item. Steam enforces ownership and its legal agreement. The loader is never included in an upload. No public test items are published for verification.
+Upload selects a compatible local package. It reruns validation before creating/submitting an item, supplies the package directory, title, description and `RuinarchModLoader` tag through the game's SteamUGC binding, and shows the actual asynchronous Steam result. A successful upload opens the item's page in Steam. New uploads default to Private. Public/Friends visibility must be selected explicitly. An existing numeric item ID updates an owned item; blank creates a new item. Steam enforces ownership and its legal agreement. The loader is never included in an upload. No public test items are published for verification.
