@@ -11,9 +11,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 OUT="${1:-$MOD_BUILD_DIR/gui}"
 GUI="$MOD_PROJECT_DIR/src/Installer.GUI/Installer.GUI.csproj"
 
-# The loader must exist to bundle it. Build it (and fetch Harmony) if needed.
+# The loader must exist to bundle it. Build it (and fetch Harmony) unless the caller
+# (package-release.sh) already did: one build keeps every release asset byte-identical.
 [ -f "$MOD_LIB_DIR/0Harmony.dll" ] || "$MOD_PROJECT_DIR/tools/get-harmony.sh"
-"$MOD_PROJECT_DIR/tools/build.sh" >/dev/null
+[ "${RUIN_SKIP_BUILD:-}" = 1 ] || "$MOD_PROJECT_DIR/tools/build.sh" >/dev/null
 [ -f "$MOD_BUILD_DIR/Ruinarch.Modding.dll" ] || { echo "loader build failed" >&2; exit 1; }
 
 for rid in linux-x64 win-x64; do

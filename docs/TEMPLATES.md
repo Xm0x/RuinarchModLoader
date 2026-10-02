@@ -10,8 +10,7 @@ The main-menu **Editor** creates and edits templates without external tools.
 
 ## Availability
 
-Loader v0.5.0 does not include building templates. Until a loader release includes this
-feature, [build and install from source](../README.md#build-from-source).
+Building templates and the editor need RuinarchModLoader 0.6.0 or newer.
 
 ## A pack
 

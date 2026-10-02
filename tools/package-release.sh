@@ -86,7 +86,7 @@ echo "OK -> dist/update-$VERSION/ (upload these files to the release)"
 
 # --- Graphical installer (self-contained: no .NET runtime needed on target) ---
 echo ">>> building graphical installers"
-"$MOD_PROJECT_DIR/tools/build-gui.sh" >/dev/null
+RUIN_SKIP_BUILD=1 "$MOD_PROJECT_DIR/tools/build-gui.sh" >/dev/null
 for rid in linux-x64 win-x64; do
 	gdir="$MOD_BUILD_DIR/gui/$rid"
 	[ -d "$gdir" ] || { echo "missing $gdir" >&2; exit 1; }
