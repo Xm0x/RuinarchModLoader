@@ -44,7 +44,8 @@ Boot never throws into the game: a failed update leaves the old loader running.
 
 ## Release manifest
 
-Each release publishes, next to the installer zips:
+A release's only assets are its zips. `RuinarchModLoader-<version>.zip` holds, in its top
+folder next to the loader files:
 
 - `update.json`:
 
@@ -54,7 +55,7 @@ Each release publishes, next to the installer zips:
 
 - `update.json.sig`: RSA (PKCS#1 v1.5) SHA-256 signature of the exact bytes of
   `update.json`;
-- every file the manifest lists.
+- every file the manifest lists (the zip's own copies).
 
 The release owner holds the private key. The public key is compiled into the mod menu.
 A manifest whose signature does not verify is ignored, as is any downloaded file whose hash
@@ -63,9 +64,10 @@ so an old signed manifest cannot downgrade a player.
 
 ## Menu
 
-Once per launch, at the main menu, the mod menu downloads
-`https://github.com/Xm0x/RuinarchModLoader/releases/latest/download/update.json` and its
-signature, then shows at most one notice:
+Once per launch, at the main menu, the mod menu reads the latest release from
+`https://api.github.com/repos/Xm0x/RuinarchModLoader/releases/latest`. When its tag is newer
+than the running loader, it downloads that release's `RuinarchModLoader-<version>.zip`,
+checks the manifest's signature and every listed file, then shows at most one notice:
 
 - **Update available**: version and buttons **Update** and **What's new** (release page);
 - **Downloading**: progress;
@@ -76,12 +78,13 @@ signature, then shows at most one notice:
 - **Update failed**: the reason and **Try again**. A failed check (offline, no manifest,
   bad signature) is only logged, never shown.
 
-A file `ModLoaderUpdate/source.txt` replaces the download base URL. It exists for testing;
-signatures are still required.
+A file `ModLoaderUpdate/source.txt` replaces the release-info URL with another returning the
+same JSON fields (`tag_name`, `assets[].name`, `assets[].browser_download_url`). It exists
+for testing; signatures are still required.
 
 ## Signing tool
 
 `src/UpdateSigner` (a .NET 8 console tool): `keygen <private-key.xml>` writes a new key
 pair and prints the public key; `sign <private-key.xml> <file>` writes `<file>.sig`.
-`tools/package-release.sh` builds the update assets into `dist/update-<version>/` and signs
-them with the key at `$RUIN_UPDATE_KEY`.
+`tools/package-release.sh` writes `update.json` into the release folder, signs it with the
+key at `$RUIN_UPDATE_KEY`, and zips the folder.

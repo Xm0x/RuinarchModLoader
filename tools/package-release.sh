@@ -59,30 +59,25 @@ After a game update, run the patcher again (Steam replaces the patched file).
 This tool ships no game code or assets. It edits a copy of Ruinarch you own.
 EOF
 
-( cd "$MOD_PROJECT_DIR/dist" && zip -qr "$name.zip" "$name" )
-echo "OK -> dist/$name.zip"
-du -h "$MOD_PROJECT_DIR/dist/$name.zip" | cut -f1
-
-# --- In-game update assets: the files the menu downloads, a manifest, and its signature.
-# Upload every file in dist/update-$VERSION/ to the GitHub release as an asset.
-update="$MOD_PROJECT_DIR/dist/update-$VERSION"
-rm -rf "$update"; mkdir -p "$update"
-files=("$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$MOD_LIB_DIR/Mono.Cecil.dll" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll")
-cp "${files[@]}" "$update/"
+# --- In-game updates read this zip: a manifest of the loader files the game downloads,
+# and its signature, next to those files. The release needs no other assets.
+files=(Ruinarch.Modding.dll 0Harmony.dll Mono.Cecil.dll Ruinarch.ModContent.dll Ruinarch.ModMenu.dll)
 {
   printf '{\n  "formatVersion": 1,\n  "version": "%s",\n  "boot": 1,\n' "$VERSION"
   printf '  "page": "https://github.com/Xm0x/RuinarchModLoader/releases/tag/v%s",\n  "files": [\n' "$VERSION"
   sep=""
-  for f in "${files[@]}"; do
-    n="$(basename "$f")"
-    printf '%s    { "name": "%s", "sha256": "%s", "size": %s }' "$sep" "$n" "$(sha256sum "$update/$n" | cut -d' ' -f1)" "$(stat -c %s "$update/$n")"
+  for n in "${files[@]}"; do
+    printf '%s    { "name": "%s", "sha256": "%s", "size": %s }' "$sep" "$n" "$(sha256sum "$dist/$n" | cut -d' ' -f1)" "$(stat -c %s "$dist/$n")"
     sep=$',\n'
   done
   printf '\n  ]\n}\n'
-} > "$update/update.json"
+} > "$dist/update.json"
 dotnet build "$MOD_PROJECT_DIR/src/UpdateSigner/UpdateSigner.csproj" -c Release -o "$MOD_BUILD_DIR/signer" -v quiet >/dev/null
-dotnet "$MOD_BUILD_DIR/signer/RuinarchModLoader.UpdateSigner.dll" sign "$KEY" "$update/update.json"
-echo "OK -> dist/update-$VERSION/ (upload these files to the release)"
+dotnet "$MOD_BUILD_DIR/signer/RuinarchModLoader.UpdateSigner.dll" sign "$KEY" "$dist/update.json"
+
+( cd "$MOD_PROJECT_DIR/dist" && rm -f "$name.zip" && zip -qr "$name.zip" "$name" )
+echo "OK -> dist/$name.zip"
+du -h "$MOD_PROJECT_DIR/dist/$name.zip" | cut -f1
 
 # --- Graphical installer (self-contained: no .NET runtime needed on target) ---
 echo ">>> building graphical installers"

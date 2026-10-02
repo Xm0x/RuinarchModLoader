@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -33,7 +34,9 @@ namespace Ruinarch.ModMenu
 	/// </summary>
 	internal sealed class Updater : MonoBehaviour
 	{
-		private const string DefaultSource = "https://github.com/Xm0x/RuinarchModLoader/releases/latest/download/";
+		// The latest release's tag and assets. The update itself is inside that release's
+		// RuinarchModLoader-<version>.zip: the DLLs plus a signed update.json listing them.
+		private const string DefaultSource = "https://api.github.com/repos/Xm0x/RuinarchModLoader/releases/latest";
 		private const string PublicKey = "<RSAKeyValue><Modulus>xrbF9Cp3HPHdm5N27Lh3QzuFH6u5vlgvdf9d4PH8RcEKpvEzZYhKasY+KvSWuAO9ltqRPOi7NKqngM1LEKGw9Sson5nU8xQya3R86/ITFKiOTsKsYHxWQYJYmN7GR+1gE9sWMicCKj42athncI+AzD68481FydO5MJ1lsTxlDyltiItyiR3vTG/7gYlQIUz65qZgmdiW+ZGl8TdgWuU4rnCMJprWPuGlPP1NOAWiW8r+zTV589vOeGVXTE2BjGh+V2RRUvIhAOuWstKIXj6Tg/gRD7AdbSAJOaboLAhvn5m8G4sNs/hYd7YnBcpQJSVboMNFE3LDa6iNh0yM2nHAYoBponG53mxC56WBkuJR9heuqImZQ4lY+Qs8/JiqlkR+NdarK+X0mlr8rDq80lj2d3kjimte63TdiUnThebqO7Hf2q5EuxVdWeq+yuUdtol2Ghv0dY9l4dLWZN+MmijPboqc13NUufDSEii+2Eb9fTESdDN8u4kAlnoFX3HbIvKf</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
 
 		private enum State { Idle, Checking, Available, Downloading, Ready, NeedsInstaller, Installed, Failed }
@@ -43,6 +46,8 @@ namespace Ruinarch.ModMenu
 			internal string Version, Page;
 			internal int Boot;
 			internal List<(string name, string sha256, long size)> Files = new List<(string, string, long)>();
+			// Verified file contents from the release zip, staged when the player clicks Update.
+			internal Dictionary<string, byte[]> Payload = new Dictionary<string, byte[]>();
 		}
 
 		private static Updater _host;
@@ -83,11 +88,12 @@ namespace Ruinarch.ModMenu
 			ModMenuMod.Log?.Info("Update result: " + result);
 		}
 
+		// ModLoaderUpdate/source.txt may name another release-info URL (same JSON shape as
+		// GitHub's), for testing an update locally.
 		private static string Source()
 		{
 			string file = Path.Combine(UpdateDir, "source.txt");
-			string url = File.Exists(file) ? File.ReadAllText(file).Trim() : DefaultSource;
-			return url.EndsWith("/") ? url : url + "/";
+			return File.Exists(file) ? File.ReadAllText(file).Trim() : DefaultSource;
 		}
 
 		private static int InstalledBoot()
@@ -99,22 +105,36 @@ namespace Ruinarch.ModMenu
 		private IEnumerator Check()
 		{
 			_state = State.Checking;
-			string source = Source();
-			byte[] manifest = null, signature = null; string error = null;
-			yield return Get(source + "update.json", b => manifest = b, e => error = e);
-			if (error == null) yield return Get(source + "update.json.sig", b => signature = b, e => error = e);
+			byte[] info = null, package = null; string error = null;
+			yield return Get(Source(), b => info = b, e => error = e);
+			string version = null, zipUrl = null;
 			try
 			{
 				if (error != null) throw new InvalidDataException(error);
-				if (!Verify(manifest, signature)) throw new InvalidDataException("the update manifest's signature is not valid");
-				_release = Parse(manifest);
-				if (System.Version.Parse(_release.Version) <= System.Version.Parse(ModLoader.Version))
+				JObject latest = JObject.Parse(Encoding.UTF8.GetString(info));
+				version = ((string)latest["tag_name"] ?? "").TrimStart('v');
+				if (System.Version.Parse(version) > System.Version.Parse(ModLoader.Version))
+				{
+					string zipName = $"RuinarchModLoader-{version}.zip";
+					zipUrl = (string)((latest["assets"] as JArray)?.FirstOrDefault(a => (string)a["name"] == zipName)?["browser_download_url"])
+						?? throw new InvalidDataException($"release {version} has no {zipName}");
+				}
+			}
+			catch (Exception e) { error = e.Message; }
+			if (error == null && zipUrl != null) yield return Get(zipUrl, b => package = b, e => error = e);
+			try
+			{
+				if (error != null) throw new InvalidDataException(error);
+				if (package == null)
 				{
 					_state = State.Idle;
-					ModMenuMod.Log?.Info($"RuinarchModLoader {ModLoader.Version} is up to date (latest {_release.Version}).");
+					ModMenuMod.Log?.Info($"RuinarchModLoader {ModLoader.Version} is up to date (latest {version}).");
 				}
 				else
 				{
+					_release = Open(package);
+					if (System.Version.Parse(_release.Version) <= System.Version.Parse(ModLoader.Version))
+						throw new InvalidDataException($"the release zip holds version {_release.Version}, not a newer one");
 					_state = _release.Boot > InstalledBoot() ? State.NeedsInstaller : State.Available;
 					ModMenuMod.Log?.Info($"RuinarchModLoader {_release.Version} is available ({(_state == State.Available ? "in-game update" : "needs the installer")}).");
 				}
@@ -122,10 +142,46 @@ namespace Ruinarch.ModMenu
 			catch (Exception e)
 			{
 				// A check that cannot complete is not the player's problem: log it, show nothing.
+				_release = null;
 				_state = State.Idle;
 				ModMenuMod.Log?.Info("Update check skipped: " + e.Message);
 			}
 			Render();
+		}
+
+		// Reads a release zip: update.json and its signature, then every file it lists, each
+		// checked against the signed size and hash. Nothing is trusted before the signature.
+		private static Release Open(byte[] package)
+		{
+			using (var zip = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read))
+			{
+				ZipArchiveEntry manifest = zip.Entries.FirstOrDefault(e => e.Name == "update.json")
+					?? throw new InvalidDataException("the release zip has no update.json");
+				string dir = manifest.FullName.Substring(0, manifest.FullName.Length - manifest.Name.Length);
+				ZipArchiveEntry signature = zip.GetEntry(dir + "update.json.sig")
+					?? throw new InvalidDataException("the release zip has no update.json.sig");
+				byte[] manifestBytes = Read(manifest);
+				if (!Verify(manifestBytes, Read(signature))) throw new InvalidDataException("the update manifest's signature is not valid");
+				Release release = Parse(manifestBytes);
+				foreach (var file in release.Files)
+				{
+					ZipArchiveEntry entry = zip.GetEntry(dir + file.name) ?? throw new InvalidDataException("the release zip has no " + file.name);
+					byte[] bytes = Read(entry);
+					if (bytes.Length != file.size || Hash(bytes) != file.sha256) throw new InvalidDataException(file.name + " does not match the signed release");
+					release.Payload[file.name] = bytes;
+				}
+				return release;
+			}
+		}
+
+		private static byte[] Read(ZipArchiveEntry entry)
+		{
+			using (Stream input = entry.Open())
+			using (var output = new MemoryStream())
+			{
+				input.CopyTo(output);
+				return output.ToArray();
+			}
 		}
 
 		private static bool Verify(byte[] data, byte[] signature)
@@ -154,26 +210,17 @@ namespace Ruinarch.ModMenu
 			return release;
 		}
 
+		// The files were downloaded and verified by Check; staging only writes them out.
 		private IEnumerator Download()
 		{
-			_state = State.Downloading; Render();
-			string source = Source(), temp = Staged + ".tmp";
-			string error = null;
-			try { if (Directory.Exists(temp)) Directory.Delete(temp, true); Directory.CreateDirectory(temp); }
-			catch (Exception e) { error = e.Message; }
-			for (int i = 0; i < _release.Files.Count && error == null; i++)
-			{
-				var file = _release.Files[i];
-				_message = $"Downloading {file.name} ({i + 1} of {_release.Files.Count})..."; Render();
-				byte[] bytes = null;
-				yield return Get(source + file.name, b => bytes = b, e => error = e);
-				if (error != null) break;
-				if (bytes.Length != file.size || Hash(bytes) != file.sha256) { error = file.name + " does not match the signed release"; break; }
-				File.WriteAllBytes(Path.Combine(temp, file.name), bytes);
-			}
+			_state = State.Downloading; _message = "Preparing the update..."; Render();
+			yield return null;
+			string temp = Staged + ".tmp";
 			try
 			{
-				if (error != null) throw new InvalidDataException(error);
+				if (Directory.Exists(temp)) Directory.Delete(temp, true);
+				Directory.CreateDirectory(temp);
+				foreach (var file in _release.Files) File.WriteAllBytes(Path.Combine(temp, file.name), _release.Payload[file.name]);
 				File.WriteAllLines(Path.Combine(temp, "apply.txt"), new[] { "version " + _release.Version }.Concat(_release.Files.Select(f => f.sha256 + " " + f.name)));
 				if (Directory.Exists(Staged)) Directory.Delete(Staged, true);
 				Directory.Move(temp, Staged);
@@ -183,7 +230,7 @@ namespace Ruinarch.ModMenu
 			catch (Exception e)
 			{
 				try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch { }
-				_state = State.Failed; _message = "The update could not be downloaded: " + e.Message;
+				_state = State.Failed; _message = "The update could not be saved: " + e.Message;
 				ModMenuMod.Log?.Warning(_message);
 			}
 			Render();

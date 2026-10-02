@@ -17,14 +17,13 @@ in `Updater.cs`, and tell players to update once with the installer.
 ## Steps
 
 1. Set the version in `src/Ruinarch.Modding/ModLoader.cs` (`Version`).
-2. Run `tools/package-release.sh`. It builds everything and writes to `dist/`:
-   - `RuinarchModLoader-<version>.zip` and the two installer zips;
-   - `update-<version>/`: the files the game downloads, `update.json`, and its signature
-     `update.json.sig`.
+2. Run `tools/package-release.sh`. It builds everything and writes three zips to `dist/`:
+   `RuinarchModLoader-<version>.zip` and the two installers. The first one also holds the
+   signed `update.json` and `update.json.sig` that in-game updates read.
 3. Tag `v<version>`, push the tag, and create the GitHub release from it.
-4. Upload the three zips **and every file in `update-<version>/`** as release assets.
-   The game reads `releases/latest/download/update.json`, so a release without these
-   assets is not offered in-game.
+4. Upload the three zips as the release's assets, nothing else. The game finds the latest
+   release through GitHub's API and downloads `RuinarchModLoader-<version>.zip` from it, so
+   that zip must keep exactly this name.
 
 ## When the installer is required
 
@@ -36,6 +35,8 @@ instead of updating.
 
 ## Testing an update locally
 
-A file `<game>/ModLoaderUpdate/source.txt` holding a URL (for example
-`http://127.0.0.1:8765/`) makes the game read `update.json`, its signature and the files
-from there instead of GitHub. Signatures are still checked. Delete the file afterwards.
+A file `<game>/ModLoaderUpdate/source.txt` holding a URL makes the game read the latest
+release from there instead of GitHub's API. The URL must return JSON with `tag_name` and
+`assets` entries (`name`, `browser_download_url`), like GitHub's `releases/latest`; for
+example a static file served by `python3 -m http.server`. Signatures are still checked.
+Delete the file afterwards.
