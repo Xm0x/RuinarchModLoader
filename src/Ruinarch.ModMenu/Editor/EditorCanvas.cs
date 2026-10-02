@@ -236,7 +236,7 @@ namespace Ruinarch.ModMenu.Editor
 		private void Paint(Vector2Int cell)
 		{
 			string value = Tool == "Erase" ? null : Value;
-			if (!Document.Contains(cell.x, cell.y) || !HasLayer(Layer)) return;
+			if (!Document.CanEdit(Layer, cell.x, cell.y) || !HasLayer(Layer)) return;
 			if (_maps.TryGetValue(Layer, out Tilemap map))
 			{
 				if (Document.Get(Layer, cell.x, cell.y) == value) return;

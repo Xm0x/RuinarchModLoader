@@ -67,9 +67,13 @@ each. A kind with a single version (a farm, a special building) uses **Any villa
 
 Undo/redo operate on complete strokes, fills, resizes and property edits. Shortcuts:
 Ctrl+S saves, Ctrl+Z undoes, Ctrl+Y redoes (not while typing in a field). Resize keeps
-the lower-left cell origin and clips content outside the new bounds. Floor edits
-recompute the footprint. Live checks report missing entrances, disconnected floor,
-off-floor furniture, wrong wall tiles and unknown tiles. **Save** permits warnings,
+the lower-left cell origin and clips tiles, furniture and walls outside the new bounds.
+Entrances are where the game attaches the building to a village's paths; stock buildings
+put them just outside their walls, so the entrances layer can be painted up to two cells
+around the bounds and resizing keeps them. Floor edits recompute the footprint. Live
+checks report a missing entrance (for kinds whose game buildings have them; caves and
+mines placed by the world generator have none), floor walled off from the outside, off-floor
+furniture, wrong wall tiles and unknown tiles. **Save** permits warnings,
 but structurally invalid documents never overwrite the previous file. **Packs** and
 **Back** prompt for unsaved changes.
 

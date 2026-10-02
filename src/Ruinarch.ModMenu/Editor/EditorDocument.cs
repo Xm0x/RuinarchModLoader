@@ -55,6 +55,15 @@ namespace Ruinarch.ModMenu.Editor
 			int[] b = Template.bounds;
 			return x >= b[0] && y >= b[1] && x < b[0] + b[2] && y < b[1] + b[3];
 		}
+		/// <summary>Entrances are the game's structure connectors: the points where a village
+		/// attaches the building to its paths. Stock buildings put them just outside the walls,
+		/// so they may be edited up to <see cref="EntranceMargin"/> cells outside the bounds.</summary>
+		public const int EntranceMargin = 2;
+		public bool CanEdit(string layer, int x, int y)
+		{
+			int[] b = Template.bounds; int m = layer == "entrances" ? EntranceMargin : 0;
+			return x >= b[0] - m && y >= b[1] - m && x < b[0] + b[2] + m && y < b[1] + b[3] + m;
+		}
 		private List<string> Rows(string layer)
 		{
 			return layer == "floor" ? Template.floor : layer == "detail" ? Template.detail : Template.walls;
@@ -65,7 +74,7 @@ namespace Ruinarch.ModMenu.Editor
 		}
 		public string Get(string layer, int x, int y)
 		{
-			if (!Contains(x, y)) return null;
+			if (!CanEdit(layer, x, y)) return null;
 			if (layer == "furniture") return Template.objects.FirstOrDefault(o => At(o.pos, x, y))?.type;
 			if (layer == "entrances") return Template.entrances.Any(o => At(o.pos, x, y)) ? "entrance" : null;
 			if (layer == "thin walls") return Template.thinWalls.FirstOrDefault(o => At(o.pos, x, y))?.sprites.FirstOrDefault();
@@ -77,7 +86,7 @@ namespace Ruinarch.ModMenu.Editor
 		}
 		public void Paint(string layer, int x, int y, string value, string sprite, float rotation)
 		{
-			if (!Contains(x, y)) return;
+			if (!CanEdit(layer, x, y)) return;
 			float[] pos = { x + 0.5f + GridOffsetX, y + 0.5f + GridOffsetY, 0f };
 			if (layer == "furniture")
 			{
@@ -167,16 +176,17 @@ namespace Ruinarch.ModMenu.Editor
 			Template.center = new[] { Template.bounds[0] + width / 2, Template.bounds[1] + height / 2, 0 };
 			Template.objects.RemoveAll(o => !Inside(o.pos));
 			Template.thinWalls.RemoveAll(o => !Inside(o.pos));
-			Template.entrances.RemoveAll(o => !Inside(o.pos));
 			Template.lightSpots.RemoveAll(o => !Inside(o.pos));
 			Template.footprint = null; Template.rooms.Clear(); Template.clickBox = null;
 		}
 		private bool Inside(float[] p) { return p != null && p.Length >= 2 && Contains((int)Math.Floor(p[0] - GridOffsetX), (int)Math.Floor(p[1] - GridOffsetY)); }
 
-		public List<string> Warnings(Func<string, bool> knownTile, Func<string, bool> wallTile)
+		/// <param name="needsEntrance">Whether the base building has entrances. Buildings the world
+		/// generator places directly (caves, mines) have none and need none.</param>
+		public List<string> Warnings(Func<string, bool> knownTile, Func<string, bool> wallTile, bool needsEntrance)
 		{
 			var warnings = new List<string>();
-			if (Template.entrances.Count == 0) warnings.Add("No entrance. Villagers cannot enter this building.");
+			if (needsEntrance && Template.entrances.Count == 0) warnings.Add("No entrance. The game attaches this kind of building to a village's paths through its entrances, so it cannot place this one.");
 			var floor = new HashSet<(int x, int y)>();
 			var blocked = new HashSet<(int x, int y)>();
 			blocked.UnionWith(ThinWallCells);
@@ -190,21 +200,21 @@ namespace Ruinarch.ModMenu.Editor
 			foreach (string tile in Template.palette.Values.Distinct()) if (!knownTile(tile)) warnings.Add("Unknown tile: " + tile);
 			foreach (TemplateObject o in Template.objects)
 				if (!floor.Contains(((int)Math.Floor(o.pos[0] - GridOffsetX), (int)Math.Floor(o.pos[1] - GridOffsetY)))) warnings.Add($"{o.type} at {o.pos[0]},{o.pos[1]} is off the floor.");
+			// Villagers walk in from outside: start on the ring around the bounds and cross any
+			// cell that is not a wall, through gaps between thin walls.
+			int x0 = b[0] - 1, y0 = b[1] - 1, x1 = b[0] + b[2], y1 = b[1] + b[3];
 			var reached = new HashSet<(int x, int y)>();
 			var queue = new Queue<(int x, int y)>();
-			foreach (TemplatePoint e in Template.entrances)
-			{
-				int x = (int)Math.Floor(e.pos[0] - GridOffsetX), y = (int)Math.Floor(e.pos[1] - GridOffsetY);
-				queue.Enqueue((x, y)); Neighbors(queue, x, y);
-			}
+			for (int x = x0; x <= x1; x++) { queue.Enqueue((x, y0)); queue.Enqueue((x, y1)); }
+			for (int y = y0; y <= y1; y++) { queue.Enqueue((x0, y)); queue.Enqueue((x1, y)); }
 			while (queue.Count > 0)
 			{
 				var p = queue.Dequeue();
-				if (!floor.Contains(p) || blocked.Contains(p) || !reached.Add(p)) continue;
+				if (p.x < x0 || p.y < y0 || p.x > x1 || p.y > y1 || blocked.Contains(p) || !reached.Add(p)) continue;
 				Neighbors(queue, p.x, p.y);
 			}
 			int inaccessible = floor.Count(p => !blocked.Contains(p) && !reached.Contains(p));
-			if (inaccessible > 0) warnings.Add($"{inaccessible} floor cells are unreachable from an entrance (grid check; Test checks native paths).");
+			if (inaccessible > 0) warnings.Add($"{inaccessible} floor cells cannot be reached from outside the building: walls close them in (grid check; Test checks the game's own paths).");
 			return warnings;
 		}
 		private void Neighbors(Queue<(int x, int y)> queue, int x, int y)

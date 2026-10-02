@@ -258,7 +258,8 @@ namespace Ruinarch.ModMenu.Editor
 		private static void UpdateChecks()
 		{
 			if (_warnings == null) return;
-			List<string> warnings = Document.Warnings(r => TemplateAuthoring.Tile(r, Pack.Directory) != null, r => (TemplateAuthoring.Tile(r, Pack.Directory, true)?.name ?? "").Contains("Wall"));
+			bool needsEntrance = _canvas.BasePrefab.GetComponent<LocationStructureObject>().connectors?.Length > 0;
+			List<string> warnings = Document.Warnings(r => TemplateAuthoring.Tile(r, Pack.Directory) != null, r => (TemplateAuthoring.Tile(r, Pack.Directory, true)?.name ?? "").Contains("Wall"), needsEntrance);
 			_warnings.text = warnings.Count == 0 ? "No grid warnings. Test verifies native paths and furniture access." : string.Join("\n\n", warnings);
 			_warnings.gameObject.GetComponent<LayoutElement>().preferredHeight = Mathf.Max(120, _warnings.GetPreferredValues(_warnings.text, 258, 10000).y + 20);
 			_undoButton.interactable = Document.CanUndo; _redoButton.interactable = Document.CanRedo;
