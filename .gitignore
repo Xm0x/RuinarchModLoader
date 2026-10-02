@@ -24,3 +24,6 @@ testprefix/
 # Keep our source even though *.dll is ignored above
 !src/**/*.cs
 !examples/**/*.cs
+
+# Implementation plans hold machine-local paths and stay local
+docs/plans/
