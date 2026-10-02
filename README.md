@@ -5,9 +5,6 @@ A mod loader for **Ruinarch**, with [Harmony](https://github.com/pardeike/Harmon
 runtime patching built in. Install it into your own copy of the game, drop mods
 in a folder, and they load at startup. No BepInEx, no external injector.
 
-> This is a fan-made modding tool that edits a copy of Ruinarch you already own.
-> You need a legitimate copy of the game.
-
 ## How it works
 
 Most Unity mod loaders sit beside the game as an external injector (a proxy DLL
