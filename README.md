@@ -49,6 +49,17 @@ browse the Workshop, upload your own package, read `mods.log`, and open the `Mod
 folder. Installing, sharing and the Workshop are explained in
 [`docs/PACKAGES.md`](docs/PACKAGES.md).
 
+### Updating
+
+From version 0.6.0 the loader updates itself. When a newer release is out, the main menu
+shows a notice with an **Update** button. The download is checked against a signature
+made by the release author, and the new version installs the next time you start the
+game. You still need the installer after a Steam update of Ruinarch (click
+**Reinstall**), and the notice says so when a release needs it. Coming from 0.5.0 or
+older, run the installer once.
+
+Release authors: see [`docs/RELEASING.md`](docs/RELEASING.md).
+
 For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
 ## Writing a mod
@@ -140,9 +151,10 @@ dotnet build/patcher/RuinarchModLoader.Patcher.dll --game "$RUIN_GAME_DIR"  # in
 tools/build-gui.sh                          # graphical installer -> build/gui/{linux-x64,win-x64}
 ```
 
-`build/patcher/` then holds the patcher plus `Ruinarch.Modding.dll`, `0Harmony.dll`,
-`Mono.Cecil.dll`, `Ruinarch.ModContent.dll` and `Ruinarch.ModMenu.dll`, ready to run or
-package with `tools/package-release.sh`.
+`build/patcher/` then holds the patcher plus `Ruinarch.Boot.dll`, `Ruinarch.Modding.dll`,
+`0Harmony.dll`, `Mono.Cecil.dll`, `Ruinarch.ModContent.dll` and `Ruinarch.ModMenu.dll`,
+ready to run or package with `tools/package-release.sh` (see
+[`docs/RELEASING.md`](docs/RELEASING.md)).
 
 Requirements: .NET SDK (8.x) and a legitimate Ruinarch install to reference the
 game's Unity DLLs at build time.

@@ -43,6 +43,10 @@ namespace Ruinarch.Modding
 		private static readonly Dictionary<string, string> _assemblyPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		private static readonly string[] Infrastructure = { "0Harmony", "Mono.Cecil", "Ruinarch.ModContent", "Ruinarch.ModMenu" };
 
+		/// <summary>This loader's release version. In-game updates offer only newer versions.
+		/// A property, not a const, so other assemblies read the installed value.</summary>
+		public static string Version => "0.6.0";
+
 		/// <summary>Absolute path to the <c>Mods/</c> root (set during init).</summary>
 		public static string ModsRoot { get; private set; }
 
@@ -81,6 +85,7 @@ namespace Ruinarch.Modding
 				LogFile = Path.Combine(ModsRoot, "mods.log");
 				ConfigFile = Path.Combine(ModsRoot, "modloader.config.json");
 				TruncateLog();
+				Debug.Log($"[ModLoader] RuinarchModLoader {Version}");
 
 				_disabled = ReadDisabledSet();
 

@@ -44,6 +44,12 @@ dotnet "$CSC" "@$rsp" || { echo "loader build FAILED" >&2; rm -f "$rsp"; exit 1;
 rm -f "$rsp"
 echo "OK -> build/Ruinarch.Modding.dll"
 
+# --- Boot step: the game calls it first; it applies staged updates, then starts the loader.
+dotnet "$CSC" -target:library -nostdlib -noconfig -langversion:latest -out:"$MOD_BUILD_DIR/Ruinarch.Boot.dll" \
+  -r:"$RUIN_MANAGED_DIR/mscorlib.dll" -r:"$RUIN_MANAGED_DIR/System.Core.dll" -r:"$RUIN_MANAGED_DIR/UnityEngine.CoreModule.dll" \
+  "$MOD_PROJECT_DIR"/src/Ruinarch.Boot/*.cs || { echo "boot build FAILED" >&2; exit 1; }
+echo "OK -> build/Ruinarch.Boot.dll"
+
 # --- Content framework: references the game DLL + Harmony (unlike the loader) ---
 "$MOD_PROJECT_DIR/tools/build-framework.sh"
 
@@ -59,8 +65,9 @@ echo "OK -> build/patcher/RuinarchModLoader.Patcher.dll"
 
 # --- Stage loader + Harmony next to the patcher so install can find them ---
 cp "$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_BUILD_DIR/patcher/"
+cp "$MOD_BUILD_DIR/Ruinarch.Boot.dll"    "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_LIB_DIR/0Harmony.dll"           "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_LIB_DIR/Mono.Cecil.dll"         "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/patcher/"
 cp "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll"    "$MOD_BUILD_DIR/patcher/"
-echo "Staged: build/patcher/ (patcher + Ruinarch.Modding.dll + 0Harmony.dll + Mono.Cecil.dll + Ruinarch.ModContent.dll + Ruinarch.ModMenu.dll)"
+echo "Staged: build/patcher/ (patcher + Ruinarch.Boot.dll + Ruinarch.Modding.dll + 0Harmony.dll + Mono.Cecil.dll + Ruinarch.ModContent.dll + Ruinarch.ModMenu.dll)"

@@ -63,7 +63,7 @@ namespace Ruinarch.Modding.Patcher
 			Console.Error.WriteLine("  RuinarchModLoader.Patcher [--game <Ruinarch install dir>] --uninstall");
 			Console.Error.WriteLine();
 			Console.Error.WriteLine("With no --game, the Steam libraries are scanned automatically.");
-			Console.Error.WriteLine("Keep Ruinarch.Modding.dll and 0Harmony.dll next to the patcher.");
+			Console.Error.WriteLine("Keep the release files (Ruinarch.Boot.dll, Ruinarch.Modding.dll, 0Harmony.dll, ...) next to the patcher.");
 			return 2;
 		}
 	}

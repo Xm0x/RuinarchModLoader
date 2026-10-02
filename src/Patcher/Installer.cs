@@ -21,8 +21,9 @@ namespace Ruinarch.Modding.Patcher
 	{
 		public const string GameAssembly = "Assembly-CSharp.dll";
 		public const string LoaderAssembly = "Ruinarch.Modding.dll";
-		public const string LoaderType = "Ruinarch.Modding.ModLoader";
-		public const string LoaderMethod = "Initialize";
+		public const string BootAssembly = "Ruinarch.Boot.dll";
+		public const string BootType = "Ruinarch.Boot.Boot";
+		public const string BootMethod = "Initialize";
 		public const string Harmony = "0Harmony.dll";
 		public const string Cecil = "Mono.Cecil.dll";
 		public const string ContentFramework = "Ruinarch.ModContent.dll";
@@ -100,11 +101,17 @@ namespace Ruinarch.Modding.Patcher
 				string backup = gameDll + ".orig";
 
 				string loaderSrc = FindNextTo(LoaderAssembly, loaderSrcDirs);
+				string bootSrc = FindNextTo(BootAssembly, loaderSrcDirs);
 				string harmonySrc = FindNextTo(Harmony, loaderSrcDirs);
 				string cecilSrc = FindNextTo(Cecil, loaderSrcDirs);
 				if (loaderSrc == null)
 				{
 					log($"ERROR: {LoaderAssembly} not found next to the installer. Keep the release files together.");
+					return false;
+				}
+				if (bootSrc == null)
+				{
+					log($"ERROR: {BootAssembly} not found next to the installer. Keep the release files together.");
 					return false;
 				}
 				if (harmonySrc == null)
@@ -130,11 +137,21 @@ namespace Ruinarch.Modding.Patcher
 					log($"Backed up original -> {Path.GetFileName(backup)}");
 				}
 
-				// 2) Loader in Managed/ (referenced by the game assembly),
-				//    Harmony in Mods/ (resolved by the loader for mods).
+				// 2) Boot step + loader in Managed/ (the game assembly calls the boot step,
+				//    which applies staged updates and starts the loader), Harmony in Mods/.
 				string loaderDst = Path.Combine(managed, LoaderAssembly);
 				File.Copy(loaderSrc, loaderDst, overwrite: true);
 				log($"Installed {LoaderAssembly} -> Managed/");
+				string bootDst = Path.Combine(managed, BootAssembly);
+				File.Copy(bootSrc, bootDst, overwrite: true);
+				log($"Installed {BootAssembly} -> Managed/");
+				// An update downloaded in-game for the previous install must not overwrite this one.
+				string staged = Path.Combine(Directory.GetParent(managed).Parent.FullName, "ModLoaderUpdate", "staged");
+				if (Directory.Exists(staged))
+				{
+					Directory.Delete(staged, true);
+					log("Discarded an in-game update that was waiting to install.");
+				}
 
 				string modsDir = ModsDirFor(managed);
 				Directory.CreateDirectory(modsDir);
@@ -173,12 +190,12 @@ namespace Ruinarch.Modding.Patcher
 				//    re-running installs exactly one call and can never double-inject.
 				var resolver = new DefaultAssemblyResolver();
 				resolver.AddSearchDirectory(managed);
-				using (var loaderMod = ModuleDefinition.ReadModule(loaderDst,
+				using (var bootMod = ModuleDefinition.ReadModule(bootDst,
 					new ReaderParameters { AssemblyResolver = resolver }))
 				using (var gameMod = ModuleDefinition.ReadModule(backup,
 					new ReaderParameters { AssemblyResolver = resolver, InMemory = true }))
 				{
-					PatchModule(gameMod, loaderMod, log);
+					PatchModule(gameMod, bootMod, log);
 					gameMod.Write(gameDll);
 				}
 
@@ -214,11 +231,14 @@ namespace Ruinarch.Modding.Patcher
 				File.Delete(backup);
 				log($"Restored original {GameAssembly} and removed the backup.");
 
-				string loaderDst = Path.Combine(managed, LoaderAssembly);
-				if (File.Exists(loaderDst))
+				foreach (string file in new[] { LoaderAssembly, BootAssembly })
 				{
-					File.Delete(loaderDst);
-					log($"Removed {LoaderAssembly} from Managed/.");
+					string dst = Path.Combine(managed, file);
+					if (File.Exists(dst))
+					{
+						File.Delete(dst);
+						log($"Removed {file} from Managed/.");
+					}
 				}
 				log("Left the Mods/ folder in place (delete it yourself if you want).");
 				log("Uninstall complete.");
@@ -233,17 +253,18 @@ namespace Ruinarch.Modding.Patcher
 
 		/// <summary>
 		/// Add (or prepend to) the module initializer a call to
-		/// Ruinarch.Modding.ModLoader.Initialize(). The module initializer is the
-		/// static constructor on the special &lt;Module&gt; type; Mono runs it the
-		/// instant the assembly is loaded, before any game type is touched.
+		/// Ruinarch.Boot.Boot.Initialize(), which applies a staged loader update and then
+		/// starts the loader. The module initializer is the static constructor on the
+		/// special &lt;Module&gt; type; Mono runs it the instant the assembly is loaded,
+		/// before any game type is touched.
 		/// </summary>
-		private static void PatchModule(ModuleDefinition game, ModuleDefinition loaderMod, Action<string> log)
+		private static void PatchModule(ModuleDefinition game, ModuleDefinition bootMod, Action<string> log)
 		{
-			TypeDefinition loaderType = loaderMod.GetType(LoaderType)
-				?? throw new Exception($"{LoaderType} not found in {LoaderAssembly}");
-			MethodDefinition init = loaderType.Methods.FirstOrDefault(
-				m => m.Name == LoaderMethod && m.IsStatic && m.Parameters.Count == 0)
-				?? throw new Exception($"{LoaderType}.{LoaderMethod}() not found");
+			TypeDefinition bootType = bootMod.GetType(BootType)
+				?? throw new Exception($"{BootType} not found in {BootAssembly}");
+			MethodDefinition init = bootType.Methods.FirstOrDefault(
+				m => m.Name == BootMethod && m.IsStatic && m.Parameters.Count == 0)
+				?? throw new Exception($"{BootType}.{BootMethod}() not found");
 
 			MethodReference initRef = game.ImportReference(init);
 
@@ -269,7 +290,7 @@ namespace Ruinarch.Modding.Patcher
 				il.InsertBefore(first, il.Create(OpCodes.Call, initRef));
 			}
 
-			log("Injected ModLoader.Initialize() into the module initializer.");
+			log("Injected Boot.Initialize() into the module initializer.");
 		}
 
 		private static string FindNextTo(string file, string[] dirs)

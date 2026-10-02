@@ -6,7 +6,11 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
-VERSION="${1:-0.1.0}"
+VERSION="${1:-$(grep -oP 'public static string Version => "\K[0-9.]+' "$MOD_PROJECT_DIR/src/Ruinarch.Modding/ModLoader.cs")}"
+grep -q "public static string Version => \"$VERSION\"" "$MOD_PROJECT_DIR/src/Ruinarch.Modding/ModLoader.cs" \
+  || { echo "version $VERSION differs from ModLoader.Version; update src/Ruinarch.Modding/ModLoader.cs first" >&2; exit 1; }
+KEY="${RUIN_UPDATE_KEY:-$HOME/.config/ruinarch-modloader/update-signing-key.xml}"
+[ -f "$KEY" ] || { echo "update signing key not found: $KEY (set RUIN_UPDATE_KEY)" >&2; exit 1; }
 name="RuinarchModLoader-$VERSION"
 dist="$MOD_PROJECT_DIR/dist/$name"
 
@@ -21,6 +25,7 @@ cp "$MOD_BUILD_DIR"/patcher/RuinarchModLoader.Patcher.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/RuinarchModLoader.Patcher.runtimeconfig.json "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Mono.Cecil*.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.Modding.dll "$dist/"
+cp "$MOD_BUILD_DIR"/patcher/Ruinarch.Boot.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/0Harmony.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModContent.dll "$dist/"
 cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModMenu.dll "$dist/"
@@ -57,6 +62,27 @@ EOF
 ( cd "$MOD_PROJECT_DIR/dist" && zip -qr "$name.zip" "$name" )
 echo "OK -> dist/$name.zip"
 du -h "$MOD_PROJECT_DIR/dist/$name.zip" | cut -f1
+
+# --- In-game update assets: the files the menu downloads, a manifest, and its signature.
+# Upload every file in dist/update-$VERSION/ to the GitHub release as an asset.
+update="$MOD_PROJECT_DIR/dist/update-$VERSION"
+rm -rf "$update"; mkdir -p "$update"
+files=("$MOD_BUILD_DIR/Ruinarch.Modding.dll" "$MOD_LIB_DIR/0Harmony.dll" "$MOD_LIB_DIR/Mono.Cecil.dll" "$MOD_BUILD_DIR/Ruinarch.ModContent.dll" "$MOD_BUILD_DIR/Ruinarch.ModMenu.dll")
+cp "${files[@]}" "$update/"
+{
+  printf '{\n  "formatVersion": 1,\n  "version": "%s",\n  "boot": 1,\n' "$VERSION"
+  printf '  "page": "https://github.com/Xm0x/RuinarchModLoader/releases/tag/v%s",\n  "files": [\n' "$VERSION"
+  sep=""
+  for f in "${files[@]}"; do
+    n="$(basename "$f")"
+    printf '%s    { "name": "%s", "sha256": "%s", "size": %s }' "$sep" "$n" "$(sha256sum "$update/$n" | cut -d' ' -f1)" "$(stat -c %s "$update/$n")"
+    sep=$',\n'
+  done
+  printf '\n  ]\n}\n'
+} > "$update/update.json"
+dotnet build "$MOD_PROJECT_DIR/src/UpdateSigner/UpdateSigner.csproj" -c Release -o "$MOD_BUILD_DIR/signer" -v quiet >/dev/null
+dotnet "$MOD_BUILD_DIR/signer/RuinarchModLoader.UpdateSigner.dll" sign "$KEY" "$update/update.json"
+echo "OK -> dist/update-$VERSION/ (upload these files to the release)"
 
 # --- Graphical installer (self-contained: no .NET runtime needed on target) ---
 echo ">>> building graphical installers"
