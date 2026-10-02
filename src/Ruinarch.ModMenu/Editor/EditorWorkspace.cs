@@ -15,7 +15,10 @@ namespace Ruinarch.ModMenu.Editor
 		private static TextMeshProUGUI _warnings, _brushLabel;
 		private static Button _undoButton, _redoButton;
 		private static Transform _palette;
-		private static TMP_InputField _paletteSearch, _sourceSearch;
+		private static TMP_InputField _paletteSearch;
+		private static readonly Dictionary<string, Button> _toolButtons = new Dictionary<string, Button>(), _layerButtons = new Dictionary<string, Button>();
+		private static readonly Dictionary<TemplateBrush, Button> _brushButtons = new Dictionary<TemplateBrush, Button>();
+		private static readonly Color Selected = new Color32(110, 96, 58, 255);
 		private static readonly string[] Layers = { "floor", "detail", "walls", "thin walls", "furniture", "entrances" };
 		internal static void Edit(EditorPack pack, EditorDocument document)
 		{
@@ -38,13 +41,16 @@ namespace Ruinarch.ModMenu.Editor
 			if (_root.GetComponent<EditorShortcuts>() == null) _root.AddComponent<EditorShortcuts>();
 			_canvas.Initialize();
 			EditorUI.Label(tools.transform, "Tools", 21);
+			_toolButtons.Clear(); _layerButtons.Clear();
 			for (int i = 0; i < 5; i += 3)
 			{
 				Transform row = EditorUI.Row(tools.transform);
 				foreach (string tool in new[] { "Paint", "Erase", "Fill", "Rectangle", "Picker" }.Skip(i).Take(3))
-					EditorUI.Button(row, tool, () => { _canvas.Tool = tool; _status.text = tool + " tool selected."; });
+					_toolButtons[tool] = EditorUI.Button(row, tool, () => { _canvas.Tool = tool; Highlight(_toolButtons, tool); });
 			}
-			EditorUI.Button(tools.transform, "Rotate 90 degrees", () => { _canvas.Rotation = (_canvas.Rotation + 90) % 360; _status.text = "Rotation / edge: " + _canvas.Rotation + " degrees"; });
+			Highlight(_toolButtons, _canvas.Tool);
+			_rotate = EditorUI.Button(tools.transform, "", () => { _canvas.Rotation = (_canvas.Rotation + 90) % 360; RotationLabel(); });
+			RotationLabel();
 			EditorUI.Label(tools.transform, "Layers", 21);
 			for (int i = 0; i < Layers.Length; i += 2)
 			{
@@ -53,20 +59,29 @@ namespace Ruinarch.ModMenu.Editor
 				row.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
 				foreach (string layer in Layers.Skip(i).Take(2))
 				{
-					var select = EditorUI.Button(row, layer, () => { _canvas.Layer = layer; RefreshPalette(); _status.text = "Selected " + layer + " layer."; });
-					select.GetComponentInChildren<TMP_Text>().fontSize = 13;
+					var select = EditorUI.Button(row, layer, () => { _canvas.Layer = layer; _status.text = ""; RefreshPalette(); });
+					select.GetComponentInChildren<TMP_Text>().fontSize = 13; _layerButtons[layer] = select;
+					if (!_canvas.HasLayer(layer)) select.GetComponentInChildren<TMP_Text>().color = new Color32(140, 146, 152, 255);
 					var visible = EditorUI.Button(row, _canvas.Hidden.Contains(layer) ? "Show" : "Hide", null, 48); visible.GetComponentInChildren<TMP_Text>().fontSize = 12;
 					visible.onClick.AddListener(() => { bool show = _canvas.Hidden.Contains(layer); _canvas.SetVisible(layer, show); visible.GetComponentInChildren<TMP_Text>().text = show ? "Hide" : "Show"; });
 				}
 			}
 			EditorUI.Button(tools.transform, "Toggle grid", () => _canvas.SetVisible("grid", _canvas.Hidden.Contains("grid")));
 			_brushLabel = EditorUI.Label(tools.transform, "Choose a tile below", 15); _brushLabel.gameObject.GetComponent<LayoutElement>().preferredHeight = 38;
-			_paletteSearch = EditorUI.Input(tools.transform, "", null, "Palette search");
-			_sourceSearch = EditorUI.Input(tools.transform, Document.Template.behavesLike ?? "", null, "Source building / culture");
-			_paletteSearch.onValueChanged.AddListener(_ => RefreshPalette()); _sourceSearch.onValueChanged.AddListener(_ => RefreshPalette());
+			_paletteSearch = EditorUI.Input(tools.transform, "", null, "Search tiles");
+			_paletteSearch.onValueChanged.AddListener(_ => RefreshPalette());
 			_palette = EditorUI.Scroll(tools.transform, "Palette");
 			Properties(props.transform); RefreshPalette(); UpdateChecks();
-			_status.text = "Left drag: paint. Right or middle drag: pan. Scroll: zoom. Ctrl+S: save. Ctrl+Z / Ctrl+Y: undo / redo.";
+			_status.text = "";
+		}
+		private static void Highlight<T>(Dictionary<T, Button> buttons, T active)
+		{
+			foreach (var pair in buttons) if (pair.Value != null) pair.Value.GetComponent<Image>().color = Equals(pair.Key, active) ? Selected : EditorUI.Control;
+		}
+		private static Button _rotate;
+		private static void RotationLabel()
+		{
+			if (_rotate != null) _rotate.GetComponentInChildren<TMP_Text>().text = "Rotate 90 degrees (now " + _canvas.Rotation + ")";
 		}
 		private static GameObject FindBase()
 		{
@@ -92,8 +107,8 @@ namespace Ruinarch.ModMenu.Editor
 				if (values.Count == 0 || values.Any(v => !Enum.TryParse(v, out FACTION_TYPE f) || !Enum.IsDefined(typeof(FACTION_TYPE), f))) throw new TemplateException("Use valid FACTION_TYPE names, for example None or Human_Empire.");
 				Document.Template.cultures = values;
 			}), "Cultures");
-			EditorUI.Label(parent, "Material", 15);
-			EditorUI.Button(parent, Document.Template.material, () => Choose("Material", Enum.GetNames(typeof(RESOURCE)), value => Change(() => Document.Template.material = value)));
+			EditorUI.Label(parent, "Material (which villages build it)", 15);
+			EditorUI.Button(parent, MaterialShort(Document.Template.material), () => Choose("Material: which villages build this look", Materials(), value => Change(() => Document.Template.material = value), MaterialName));
 			EditorUI.Label(parent, "Behaves like", 15);
 			EditorUI.Button(parent, Document.Template.behavesLike ?? "Default", () => Choose("Base building", ModTemplates.GameLooks().Select(l => l.Prefab.name).Distinct(), value => Change(() => { Document.Template.behavesLike = value; _canvas.BasePrefab = FindBase(); })));
 			EditorUI.Label(parent, "Size (width / height)", 15);
@@ -108,13 +123,32 @@ namespace Ruinarch.ModMenu.Editor
 			Transform warnings = EditorUI.Scroll(parent, "Live checks"); _warnings = EditorUI.Label(warnings, "", 15);
 			_warnings.gameObject.GetComponent<LayoutElement>().preferredHeight = 250;
 		}
-		private static void Choose(string title, IEnumerable<string> values, Action<string> chosen)
+		/// <summary>Villages build most kinds in wood or stone, depending on the resource they can reach;
+		/// the game keeps one list of looks per material. Kinds without versions use NONE.</summary>
+		private static IEnumerable<string> Materials()
 		{
+			var used = TemplateAuthoring.Looks().Where(l => TemplateAuthoring.KindId(l.Kind) == Document.Template.kind).Select(l => l.Material.ToString()).Distinct().ToList();
+			return used.Count > 0 ? used : new List<string> { "WOOD", "STONE", "NONE" };
+		}
+		private static string MaterialShort(string material)
+		{
+			return material == "WOOD" ? "Wood" : material == "STONE" ? "Stone" : material == "NONE" ? "Any village" : material;
+		}
+		private static string MaterialName(string material)
+		{
+			return material == "WOOD" ? "Wood: villages that build in wood"
+				: material == "STONE" ? "Stone: villages that build in stone"
+				: material == "NONE" ? "Any village: this kind has no wood or stone versions"
+				: material;
+		}
+		private static void Choose(string title, IEnumerable<string> values, Action<string> chosen, Func<string, string> name = null)
+		{
+			name = name ?? (v => v);
 			DismissDialog(); _dialog = EditorUI.Box("Property picker", _root.transform, new Color(0, 0, 0, .85f)); EditorUI.Stretch(_dialog);
 			var col = EditorUI.Column(title, _dialog.transform); EditorUI.Rect(col, new Vector2(.2f, .12f), new Vector2(.8f, .88f), Vector2.zero, Vector2.zero);
-			EditorUI.Label(col.transform, title, 23); var search = EditorUI.Input(col.transform, "", null, "Property search");
+			EditorUI.Label(col.transform, title, 23); var search = EditorUI.Input(col.transform, "", null, "Search");
 			Transform list = EditorUI.Scroll(col.transform, "Choices");
-			Action refresh = () => { EditorUI.Clear(list); foreach (string value in values.OrderBy(v => v).Where(v => v.IndexOf(search.text, StringComparison.OrdinalIgnoreCase) >= 0)) EditorUI.Button(list, value, () => { DismissDialog(); chosen(value); Edit(Pack, Document); }); };
+			Action refresh = () => { EditorUI.Clear(list); foreach (string value in values.OrderBy(v => name(v)).Where(v => name(v).IndexOf(search.text, StringComparison.OrdinalIgnoreCase) >= 0)) EditorUI.Button(list, name(value), () => { DismissDialog(); chosen(value); Edit(Pack, Document); }); };
 			search.onValueChanged.AddListener(_ => refresh()); EditorUI.Button(col.transform, "Cancel", DismissDialog); refresh();
 		}
 		private static void Change(Action mutate)
@@ -130,13 +164,26 @@ namespace Ruinarch.ModMenu.Editor
 		private static void RefreshPalette()
 		{
 			if (_palette == null || _canvas == null) return;
-			EditorUI.Clear(_palette);
+			EditorUI.Clear(_palette); _brushButtons.Clear(); Highlight(_layerButtons, _canvas.Layer);
+			if (!_canvas.HasLayer(_canvas.Layer))
+			{
+				_canvas.Value = null; _brushLabel.text = "Nothing to paint on this layer";
+				EditorUI.Label(_palette, _canvas.MissingLayer(_canvas.Layer), 14).GetComponent<LayoutElement>().preferredHeight = 110;
+				return;
+			}
 			if (_canvas.Layer == "entrances")
 			{
 				EditorUI.Button(_palette, "Entrance marker", () => { _canvas.Value = "entrance"; _canvas.SpriteReference = null; _brushLabel.text = "Entrance marker"; });
-				_canvas.Value = "entrance"; return;
+				_canvas.Value = "entrance"; _brushLabel.text = "Entrance marker"; return;
 			}
-			var brushes = TemplateAuthoring.Brushes().Where(b => b.Layer == _canvas.Layer).ToList();
+			// One brush per tile or furniture piece, preferring the base building's own copy.
+			string own = " / " + _canvas.BasePrefab.name;
+			var used = new HashSet<string>(Document.Template.palette.Values.Concat(Document.Template.objects.Select(o => o.type + "|" + o.sprite)).Concat(Document.Template.thinWalls.Select(w => w.layout)).Where(v => v != null));
+			var brushes = TemplateAuthoring.Brushes().Where(b => b.Layer == _canvas.Layer)
+				.GroupBy(b => (b.Reference, b.ObjectType, b.Name))
+				.Select(g => g.FirstOrDefault(b => b.Source.EndsWith(own)) ?? g.First())
+				.Select(b => (brush: b, group: b.Source.EndsWith(own) || used.Contains(b.Reference) || used.Contains(b.ObjectType + "|" + b.Reference) || (b.Wall != null && used.Contains(b.Wall.layout)) ? "In this building" : "All game buildings"))
+				.ToList();
 			string art = Path.Combine(Pack.Directory, "art");
 			if (Directory.Exists(art)) foreach (string file in Directory.GetFiles(art, "*.png", SearchOption.AllDirectories))
 			{
@@ -144,34 +191,53 @@ namespace Ruinarch.ModMenu.Editor
 				var sprite = TemplateAuthoring.Sprite(reference, Pack.Directory);
 				if (_canvas.Layer == "furniture")
 				{
-					foreach (string type in brushes.Select(b => b.ObjectType).Distinct().ToArray()) brushes.Add(new TemplateBrush { Reference = reference, ObjectType = type, Layer = "furniture", Source = "Pack PNGs", Sprite = sprite });
+					foreach (string type in brushes.Select(b => b.brush.ObjectType).Distinct().ToArray()) brushes.Add((new TemplateBrush { Reference = reference, ObjectType = type, Layer = "furniture", Source = "Pack PNGs", Sprite = sprite }, "Your pack's PNGs"));
 				}
-				else brushes.Add(new TemplateBrush { Reference = reference, Layer = _canvas.Layer, Source = "Pack PNGs", Sprite = sprite });
+				else if (_canvas.Layer != "thin walls") brushes.Add((new TemplateBrush { Reference = reference, Layer = _canvas.Layer, Source = "Pack PNGs", Sprite = sprite }, "Your pack's PNGs"));
 			}
-			var filtered = brushes.Where(b => ((b.Reference ?? "") + " " + b.ObjectType).IndexOf(_paletteSearch.text, StringComparison.OrdinalIgnoreCase) >= 0 && (b.Source == "Pack PNGs" || b.Source.IndexOf(_sourceSearch.text, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-			foreach (var group in filtered.GroupBy(b => b.Source))
+			var order = new[] { "In this building", "Your pack's PNGs", "All game buildings" };
+			var filtered = brushes.Where(b => BrushName(b.brush).IndexOf(_paletteSearch.text, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+			foreach (var group in filtered.GroupBy(b => b.group).OrderBy(g => Array.IndexOf(order, g.Key)))
 			{
-				var title = EditorUI.Label(_palette, group.Key, 13); title.gameObject.GetComponent<LayoutElement>().preferredHeight = 42;
-				foreach (TemplateBrush brush in group)
+				var title = EditorUI.Label(_palette, group.Key + " (" + group.Count() + ")", 15); title.color = EditorUI.Accent; title.gameObject.GetComponent<LayoutElement>().preferredHeight = 36;
+				foreach (TemplateBrush brush in group.Select(b => b.brush).OrderBy(BrushName))
 				{
-					string label = brush.ObjectType ?? brush.Name ?? brush.Reference;
-					var button = EditorUI.Button(_palette, label, () => SelectBrush(brush)); button.GetComponent<LayoutElement>().preferredHeight = 46;
+					var button = EditorUI.Button(_palette, BrushName(brush), () =>
+					{
+						SelectBrush(brush);
+						if (_canvas.Tool == "Erase" || _canvas.Tool == "Picker") { _canvas.Tool = "Paint"; Highlight(_toolButtons, "Paint"); }
+					});
+					button.GetComponent<LayoutElement>().preferredHeight = 52;
 					var text = button.GetComponentInChildren<TMP_Text>(); text.fontSize = 13; text.alignment = TextAlignmentOptions.MidlineLeft;
-					EditorUI.Rect(text.gameObject, Vector2.zero, Vector2.one, new Vector2(44, 0), new Vector2(-4, 0));
+					EditorUI.Rect(text.gameObject, Vector2.zero, Vector2.one, new Vector2(54, 0), new Vector2(-4, 0));
 					if (brush.Sprite != null)
 					{
 						var icon = EditorUI.New("Brush icon", button.transform); var image = icon.AddComponent<Image>(); image.sprite = brush.Sprite; image.preserveAspect = true; image.raycastTarget = false;
-						EditorUI.Rect(icon, Vector2.zero, new Vector2(0, 1), new Vector2(4, 4), new Vector2(40, -4));
+						EditorUI.Rect(icon, Vector2.zero, new Vector2(0, 1), new Vector2(4, 4), new Vector2(48, -4));
 					}
+					_brushButtons[brush] = button;
 				}
 			}
-			TemplateBrush first = filtered.FirstOrDefault(); if (first != null) SelectBrush(first); else { _canvas.Value = null; _brushLabel.text = "No matching brushes. Clear the search or source filter."; }
+			TemplateBrush first = filtered.OrderBy(b => Array.IndexOf(order, b.group)).ThenBy(b => BrushName(b.brush)).Select(b => b.brush).FirstOrDefault();
+			if (first != null) SelectBrush(first); else { _canvas.Value = null; _brushLabel.text = "Nothing matches the search."; }
+		}
+		/// <summary>A readable palette name: the tile, furniture or wall piece without reference prefixes.</summary>
+		private static string BrushName(TemplateBrush brush)
+		{
+			string reference = brush.Reference == null ? "" : brush.Reference.StartsWith("game:") ? brush.Reference.Substring(5) : brush.Reference.StartsWith("art:") ? brush.Reference.Substring(4) : brush.Reference;
+			string kind = brush.ObjectType != null ? Words(brush.ObjectType) : brush.Name;
+			return kind == null ? reference : reference.Length == 0 ? kind : kind + " (" + reference + ")";
+		}
+		private static string Words(string id)
+		{
+			string s = id.Replace('_', ' ').ToLowerInvariant(); return s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 		}
 		private static void SelectBrush(TemplateBrush brush)
 		{
 			_canvas.Value = brush.ObjectType ?? brush.Reference; _canvas.SpriteReference = brush.ObjectType != null ? brush.Reference : null;
 			if (brush.Wall != null || _canvas.Layer != "thin walls") Document.WallBrush = brush.Wall;
-			_canvas.Rotation = brush.Rotation; _brushLabel.text = string.Join(" / ", new[] { brush.ObjectType ?? brush.Name, brush.Reference }.Where(s => !string.IsNullOrEmpty(s)));
+			_canvas.Rotation = brush.Rotation; RotationLabel(); _brushLabel.text = BrushName(brush);
+			Highlight(_brushButtons, brush);
 		}
 		private static void Pick(string layer, int x, int y)
 		{
@@ -186,7 +252,8 @@ namespace Ruinarch.ModMenu.Editor
 				Document.WallBrush = Document.Template.thinWalls.FirstOrDefault(v => Mathf.FloorToInt(v.pos[0] - Document.GridOffsetX) == x && Mathf.FloorToInt(v.pos[1] - Document.GridOffsetY) == y);
 				_canvas.Rotation = Document.WallBrush?.rot ?? 0;
 			}
-			_canvas.Tool = "Paint"; _brushLabel.text = _canvas.Value ?? "Empty cell (erases)";
+			_canvas.Tool = "Paint"; Highlight(_toolButtons, "Paint"); Highlight(_brushButtons, null); RotationLabel();
+			_brushLabel.text = _canvas.Value == null ? "Empty cell (paints as eraser)" : _canvas.Value.StartsWith("game:") ? _canvas.Value.Substring(5) : _canvas.Value;
 		}
 		private static void UpdateChecks()
 		{

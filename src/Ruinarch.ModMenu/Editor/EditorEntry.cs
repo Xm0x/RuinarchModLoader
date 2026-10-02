@@ -15,13 +15,29 @@ namespace Ruinarch.ModMenu.Editor
 		{
 			try
 			{
-				var source = AccessTools.Field(typeof(MainMenuUI), "newGameButton").GetValue(__instance) as Button;
-				if (source == null || __instance.transform.Find("Building template editor button") != null) return;
-				var go = UnityEngine.Object.Instantiate(source.gameObject, __instance.transform, false); go.name = "Building template editor button";
-				var rt = go.GetComponent<RectTransform>(); rt.anchorMin = rt.anchorMax = new Vector2(1, 1); rt.pivot = new Vector2(1, 1); rt.sizeDelta = new Vector2(200, 45); rt.anchoredPosition = new Vector2(-28, -28);
-				var label = go.GetComponentInChildren<TMP_Text>(true); if (label != null) label.text = "Editor";
-				var button = go.GetComponent<Button>(); button.onClick = new Button.ButtonClickedEvent(); button.interactable = true;
-				button.onClick.AddListener(EditorHost.Open); go.SetActive(true);
+				var newGame = AccessTools.Field(typeof(MainMenuUI), "newGameButton").GetValue(__instance) as Button;
+				Transform buttons = newGame?.transform.parent, mods = buttons?.Find("ModsBtn"), exit = buttons?.Find("ExitBtn");
+				if (mods == null || exit == null) { ModMenuMod.Log?.Warning("Cannot add building editor: the main menu has no Mods or Exit button."); return; }
+				if (buttons.Find("EditorBtn") == null)
+				{
+					// The menu's buttons sit at hand-placed positions, not in a layout group:
+					// Editor takes Exit's row and Exit moves down by the same step.
+					var modsRect = (RectTransform)mods; var exitRect = (RectTransform)exit;
+					Vector2 step = new Vector2(0, exitRect.anchoredPosition.y - modsRect.anchoredPosition.y);
+					var go = UnityEngine.Object.Instantiate(mods.gameObject, buttons, false); go.name = "EditorBtn";
+					go.transform.SetSiblingIndex(mods.GetSiblingIndex() + 1);
+					((RectTransform)go.transform).anchoredPosition = new Vector2((modsRect.anchoredPosition.x + exitRect.anchoredPosition.x) / 2, exitRect.anchoredPosition.y);
+					exitRect.anchoredPosition += step;
+					var label = go.GetComponentInChildren<TMP_Text>(true);
+					if (label != null)
+					{
+						// The localization component would set the copied label back to "Mods".
+						foreach (Component c in label.GetComponents<Component>()) if (c.GetType().Name == "CustomLocalizeStringEvent") UnityEngine.Object.DestroyImmediate(c);
+						label.text = "Editor";
+					}
+					var button = go.GetComponent<Button>(); button.onClick = new Button.ButtonClickedEvent(); button.interactable = true;
+					button.onClick.AddListener(EditorHost.Open); go.SetActive(true);
+				}
 				if (EditorWorldTest.Returning) { EditorWorldTest.Returning = false; EditorHost.Open(); }
 			}
 			catch (Exception e) { ModMenuMod.Log?.Error("Cannot add building editor: " + e); }

@@ -33,6 +33,7 @@ namespace Ruinarch.ModMenu.Editor
 		private Vector2 _pointer;
 		private readonly Dictionary<string, List<GameObject>> _layers = new Dictionary<string, List<GameObject>>();
 		private readonly Dictionary<string, Tilemap> _maps = new Dictionary<string, Tilemap>();
+		private readonly List<LineRenderer> _gridLines = new List<LineRenderer>();
 		private Vector2 GridOffset => new Vector2(Document.GridOffsetX, Document.GridOffsetY);
 
 		internal void Initialize()
@@ -56,7 +57,7 @@ namespace Ruinarch.ModMenu.Editor
 			if (_texture != null && _texture.width == width && _texture.height == height) return;
 			if (_texture != null) { _texture.Release(); Destroy(_texture); }
 			_texture = new RenderTexture(width, height, 24); _texture.Create(); _image.texture = _texture;
-			_camera.targetTexture = _texture; _camera.aspect = width / (float)height;
+			_camera.targetTexture = _texture; _camera.aspect = width / (float)height; GridWidth();
 		}
 		internal void Fit()
 		{
@@ -66,7 +67,20 @@ namespace Ruinarch.ModMenu.Editor
 		private void CameraPosition()
 		{
 			if (_camera == null) return;
-			_camera.transform.localPosition = new Vector3(_pan.x, _pan.y, -10); _camera.orthographicSize = _zoom;
+			_camera.transform.localPosition = new Vector3(_pan.x, _pan.y, -10); _camera.orthographicSize = _zoom; GridWidth();
+		}
+		// Grid lines stay one pixel wide at every zoom; thinner lines drop out of the render.
+		private void GridWidth()
+		{
+			if (_texture == null) return;
+			float width = _zoom * 2 / _texture.height;
+			foreach (LineRenderer line in _gridLines) if (line != null) { line.startWidth = width; line.endWidth = width; }
+		}
+		/// <summary>Whether the base building has a tilemap for a tile layer. Other layers always exist.</summary>
+		internal bool HasLayer(string layer)
+		{
+			string field = layer == "floor" ? "_groundTileMap" : layer == "detail" ? "_detailTileMap" : layer == "walls" ? "_blockWallsTilemap" : null;
+			return field == null || AccessTools.Field(typeof(LocationStructureObject), field).GetValue(BasePrefab.GetComponent<LocationStructureObject>()) != null;
 		}
 		private void ConfigureGrid()
 		{
@@ -89,7 +103,7 @@ namespace Ruinarch.ModMenu.Editor
 		internal void Redraw()
 		{
 			if (_geometry != null) { _geometry.SetActive(false); Destroy(_geometry); }
-			_geometry = new GameObject("Preview geometry"); _geometry.transform.SetParent(_renderRoot.transform, false); _layers.Clear(); _maps.Clear(); ConfigureGrid();
+			_geometry = new GameObject("Preview geometry"); _geometry.transform.SetParent(_renderRoot.transform, false); _layers.Clear(); _maps.Clear(); _gridLines.Clear(); ConfigureGrid();
 			GameObject built = null;
 			try
 			{
@@ -131,8 +145,9 @@ namespace Ruinarch.ModMenu.Editor
 			catch (Exception e) { Error?.Invoke(e.Message); }
 			finally { if (built != null) ModTemplates.DestroyDetached(built); }
 			int[] b = Document.Template.bounds;
-			for (int x = b[0]; x <= b[0] + b[2]; x++) Line("grid", GridOffset + new Vector2(x, b[1]), GridOffset + new Vector2(x, b[1] + b[3]), new Color(1, 1, 1, .16f), .012f);
-			for (int y = b[1]; y <= b[1] + b[3]; y++) Line("grid", GridOffset + new Vector2(b[0], y), GridOffset + new Vector2(b[0] + b[2], y), new Color(1, 1, 1, .16f), .012f);
+			for (int x = b[0]; x <= b[0] + b[2]; x++) _gridLines.Add(Line("grid", GridOffset + new Vector2(x, b[1]), GridOffset + new Vector2(x, b[1] + b[3]), new Color(1, 1, 1, .16f), .012f));
+			for (int y = b[1]; y <= b[1] + b[3]; y++) _gridLines.Add(Line("grid", GridOffset + new Vector2(b[0], y), GridOffset + new Vector2(b[0] + b[2], y), new Color(1, 1, 1, .16f), .012f));
+			GridWidth();
 			foreach (TemplatePoint e in Document.Template.entrances)
 			{
 				var p = new Vector2(e.pos[0], e.pos[1]); Color c = new Color32(97, 196, 203, 255);
@@ -178,11 +193,12 @@ namespace Ruinarch.ModMenu.Editor
 		{
 			Document.ThinWallEdges.Add((x, y, nx, ny)); Document.ThinWallEdges.Add((nx, ny, x, y));
 		}
-		private void Line(string layer, Vector2 a, Vector2 b, Color color, float width)
+		private LineRenderer Line(string layer, Vector2 a, Vector2 b, Color color, float width)
 		{
 			var go = new GameObject(layer, typeof(LineRenderer)); go.transform.SetParent(_geometry.transform, false);
 			var line = go.GetComponent<LineRenderer>(); line.useWorldSpace = false; line.positionCount = 2; line.SetPosition(0, a); line.SetPosition(1, b);
 			line.sharedMaterial = _material; line.startColor = color; line.endColor = color; line.startWidth = width; line.endWidth = width; line.sortingOrder = 20; AddLayer(go, layer);
+			return line;
 		}
 		private Vector2 Local(PointerEventData e)
 		{
@@ -197,9 +213,15 @@ namespace Ruinarch.ModMenu.Editor
 			if (e.button != PointerEventData.InputButton.Left) { _panning = true; _pointer = Local(e); return; }
 			_start = _last = Cell(e);
 			if (Tool == "Picker") { Picked?.Invoke(Layer, _start.x, _start.y); return; }
+			if (!HasLayer(Layer)) { Error?.Invoke(MissingLayer(Layer)); return; }
 			_painting = true; Document.BeginEdit();
 			if (Tool == "Fill") { Document.Fill(Layer, _start.x, _start.y, Value, SpriteReference, Rotation); Commit(); }
 			else if (Tool != "Rectangle") Paint(_start);
+		}
+		internal string MissingLayer(string layer)
+		{
+			string instead = layer == "walls" ? "Use the thin walls layer for its walls, or set" : "Set";
+			return $"{BasePrefab.name} has no {layer} tiles. {instead} Behaves like to a building that has {layer} tiles.";
 		}
 		public void OnDrag(PointerEventData e)
 		{
@@ -214,7 +236,7 @@ namespace Ruinarch.ModMenu.Editor
 		private void Paint(Vector2Int cell)
 		{
 			string value = Tool == "Erase" ? null : Value;
-			if (!Document.Contains(cell.x, cell.y)) return;
+			if (!Document.Contains(cell.x, cell.y) || !HasLayer(Layer)) return;
 			if (_maps.TryGetValue(Layer, out Tilemap map))
 			{
 				if (Document.Get(Layer, cell.x, cell.y) == value) return;
@@ -226,7 +248,7 @@ namespace Ruinarch.ModMenu.Editor
 		public void OnPointerUp(PointerEventData e)
 		{
 			_panning = false; if (!_painting) return;
-			if (Tool == "Rectangle") { var end = Cell(e); Document.Rectangle(Layer, _start.x, _start.y, end.x, end.y, Value, SpriteReference, Rotation); }
+			if (Tool == "Rectangle" && HasLayer(Layer)) { var end = Cell(e); Document.Rectangle(Layer, _start.x, _start.y, end.x, end.y, Value, SpriteReference, Rotation); }
 			Commit();
 		}
 		private void Commit() { _painting = false; Document.EndEdit(); if (Tool == "Rectangle" || Tool == "Fill") Redraw(); Changed?.Invoke(); }

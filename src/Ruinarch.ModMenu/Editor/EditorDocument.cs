@@ -150,6 +150,8 @@ namespace Ruinarch.ModMenu.Editor
 			{
 				var replacement = new List<string>();
 				List<string> old = Rows(layer);
+				// A layer the building does not use stays empty: its base building may have no tilemap for it.
+				if (old == null || !old.Any(r => r.Any(c => c != '.'))) { old?.Clear(); continue; }
 				for (int row = 0; row < height; row++)
 				{
 					int source = old.Count - height + row;

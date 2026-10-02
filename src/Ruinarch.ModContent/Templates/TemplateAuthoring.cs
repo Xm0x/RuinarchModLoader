@@ -91,7 +91,7 @@ namespace Ruinarch.ModContent.Templates
 					foreach (char key in string.Concat(rows).Where(c => c != '.').Distinct())
 					{
 						string reference = t.palette[key.ToString()]; var tile = Tile(reference, null, layer == "walls");
-						brushes.Add(new TemplateBrush { Reference = reference, Source = source, Layer = layer, Tile = tile, Sprite = tile is UnityEngine.Tilemaps.Tile actual ? actual.sprite : null });
+						brushes.Add(new TemplateBrush { Reference = reference, Source = source, Layer = layer, Tile = tile, Sprite = Preview(tile) });
 					}
 				}
 				foreach (TemplateObject o in t.objects)
@@ -106,6 +106,44 @@ namespace Ruinarch.ModContent.Templates
 				}
 			}
 			_brushes = brushes; return _brushes;
+		}
+		private static Tilemap _scratch;
+		/// <summary>The sprite a tile draws on its own. Random and rule tiles have no single sprite,
+		/// so they are resolved through a hidden tilemap, or their first sprite.</summary>
+		private static Sprite Preview(TileBase tile)
+		{
+			if (tile == null) return null;
+			if (tile is UnityEngine.Tilemaps.Tile plain && plain.sprite != null) return plain.sprite;
+			if (_scratch == null)
+			{
+				// No renderer: the tilemap only resolves tile data and never draws.
+				var go = new GameObject("Template brush previews", typeof(Grid)); UnityEngine.Object.DontDestroyOnLoad(go);
+				var map = new GameObject("Tiles", typeof(Tilemap)); map.transform.SetParent(go.transform, false); _scratch = map.GetComponent<Tilemap>();
+			}
+			_scratch.SetTile(Vector3Int.zero, tile);
+			Sprite sprite = _scratch.GetSprite(Vector3Int.zero);
+			_scratch.SetTile(Vector3Int.zero, null);
+			// Rule and random tiles pick sprites from neighbours or chance; show their first one.
+			return sprite != null ? sprite : FirstSprite(tile, 4);
+		}
+		private static Sprite FirstSprite(object value, int depth)
+		{
+			if (value == null || depth < 0) return null;
+			if (value is Sprite s) return s;
+			if (value is IEnumerable list && !(value is string))
+			{
+				foreach (object item in list) { Sprite found = FirstSprite(item, depth - 1); if (found != null) return found; }
+				return null;
+			}
+			if (value is UnityEngine.Object && !(value is ScriptableObject)) return null;
+			for (Type type = value.GetType(); type != null && type != typeof(object) && type != typeof(ScriptableObject); type = type.BaseType)
+				foreach (var field in type.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly))
+				{
+					if (field.FieldType.IsPrimitive || field.FieldType.IsEnum || field.FieldType == typeof(string)) continue;
+					Sprite found = FirstSprite(field.GetValue(value), depth - 1);
+					if (found != null) return found;
+				}
+			return null;
 		}
 	}
 

@@ -39,7 +39,7 @@ their templates into your own pack (it never edits them in place). See
 
 ## Visual editor
 
-Open **Editor** from the main menu. On the first visit it briefly loads the game's
+Open **Editor** from the main menu (below **Mods**). On the first visit it briefly loads the game's
 building assets, without generating a world. Create or select a local pack, then open
 a template or choose **New from existing / New blank**. Filter the source browser by
 kind, culture, material or prefab name. A blank building still borrows a real building
@@ -50,12 +50,20 @@ pack folder. Both ask first and cannot be undone. Saved games that used a delete
 show the building it was based on. The editor never deletes code mods; remove those from
 the `Mods/` folder yourself.
 
-The workspace has paint, erase, connected fill, rectangle and picker tools. Choose a
-layer and a thumbnail from the source-grouped palette. Clear the source filter to use
-another building's art; pack PNGs are always available. Thin-wall brushes retain their
-native edge, corners and decoration. **Rotate 90 degrees** rotates wall/furniture pieces.
-Right or middle drag pans; scroll zooms around the pointer; **Fit** restores the overview.
-Each layer and the grid can be hidden independently.
+The workspace has paint, erase, connected fill, rectangle and picker tools; the chosen
+tool, layer and tile are highlighted. The palette lists every tile, wall piece and piece
+of furniture the game's buildings use for the chosen layer, with a thumbnail: first the
+ones in this building, then your pack's PNGs, then all other game buildings. Type in
+**Search tiles** to narrow it down. A layer the base building does not have (many
+buildings have no block walls, only thin walls) cannot be painted and the palette says
+so. Thin-wall brushes retain their native edge, corners and decoration. **Rotate 90
+degrees** rotates wall/furniture pieces. Right or middle drag pans; scroll zooms around
+the pointer; **Fit** restores the overview. Each layer and the grid can be hidden
+independently.
+
+**Material** decides which villages build the look. Villages build most kinds in wood or
+stone, depending on the resource they can reach, and the game keeps a list of looks for
+each. A kind with a single version (a farm, a special building) uses **Any village**.
 
 Undo/redo operate on complete strokes, fills, resizes and property edits. Shortcuts:
 Ctrl+S saves, Ctrl+Z undoes, Ctrl+Y redoes (not while typing in a field). Resize keeps

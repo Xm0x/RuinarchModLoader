@@ -62,13 +62,13 @@ namespace Ruinarch.ModMenu.Editor
 			EditorUI.Label(left.transform, "Local packs are editable. Workshop templates can be copied into a local pack.", 16).gameObject.GetComponent<LayoutElement>().preferredHeight = 56;
 			var packs = EditorUI.Scroll(left.transform, "Pack list");
 			var right = EditorUI.Column("Templates", _body.transform); EditorUI.Rect(right, new Vector2(.38f, 0), Vector2.one, new Vector2(8, 0), Vector2.zero);
-			EditorUI.Label(right.transform, "Select a pack or create one", 23);
+			var heading = EditorUI.Label(right.transform, "Select a pack or create one", 23);
 			Transform templates = EditorUI.Scroll(right.transform, "Template list");
 			foreach (EditorPack p in EditorPacks.Sources())
 				EditorUI.Button(packs, p.Name + " (" + p.Id + ")", () =>
 				{
 					if (p.ReadOnly) _status.text = "Steam Workshop packs are read-only. Select a local pack, then use New from existing to copy one of its templates.";
-					else SelectPack(p, templates);
+					else { SelectPack(p, templates); heading.text = p.Name; }
 				});
 			EditorUI.Label(left.transform, "Create a pack", 20);
 			var name = EditorUI.Input(left.transform, "My buildings", null, "Pack name");
@@ -83,11 +83,10 @@ namespace Ruinarch.ModMenu.Editor
 				Dialog("Delete " + pack.Name + "?", new[] { ("Delete pack", (Action)(() => Guard(() => { EditorPacks.DeletePack(pack); StartScreen(); _status.text = "Deleted " + pack.Name + "."; }))), ("Cancel", (Action)DismissDialog) },
 					$"The folder and its {count} building(s) are removed for good. Saved games that use them show the original buildings instead.");
 			});
-			_status.text = "Packs add building looks. Code mods add building kinds.";
 		}
 		private static void SelectPack(EditorPack pack, Transform list)
 		{
-			Pack = pack; EditorUI.Clear(list); _status.text = "Selected " + pack.Name;
+			Pack = pack; EditorUI.Clear(list);
 			foreach (string file in EditorPacks.Files(pack))
 			{
 				string title;

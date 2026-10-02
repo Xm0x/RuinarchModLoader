@@ -55,6 +55,13 @@ namespace Ruinarch.ModMenu.Editor
 			var placeholder = Label(viewport.transform, name, 15); Stretch(placeholder.gameObject); placeholder.color = new Color32(153, 164, 174, 255);
 			input.placeholder = placeholder;
 			input.text = value ?? ""; input.characterLimit = 512;
+			// A blinking light caret and a lit border show which field has focus.
+			input.customCaretColor = true; input.caretColor = Color.white; input.caretWidth = 2; input.caretBlinkRate = 1.1f;
+			input.selectionColor = new Color(Accent.r, Accent.g, Accent.b, .45f);
+			var outline = go.AddComponent<Outline>(); outline.effectColor = Color.clear; outline.effectDistance = new Vector2(2, 2);
+			go.AddComponent<InputFocus>().Input = input;
+			// TMP_InputField makes its caret in OnEnable, which ran before textComponent was set.
+			input.enabled = false; input.enabled = true;
 			var le = go.AddComponent<LayoutElement>(); le.minHeight = 34; le.preferredHeight = 34;
 			if (changed != null) input.onEndEdit.AddListener(s => changed(s));
 			return input;
@@ -95,6 +102,16 @@ namespace Ruinarch.ModMenu.Editor
 			var scaler = root.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
 			scaler.referenceResolution = new Vector2(1600, 900); scaler.matchWidthOrHeight = .5f;
 			var background = root.AddComponent<Image>(); background.color = Background; return root;
+		}
+	}
+	internal sealed class InputFocus : MonoBehaviour
+	{
+		internal TMP_InputField Input;
+		private Outline _outline;
+		private void Update()
+		{
+			if (_outline == null) _outline = GetComponent<Outline>();
+			_outline.effectColor = Input != null && Input.isFocused ? EditorUI.Accent : Color.clear;
 		}
 	}
 }

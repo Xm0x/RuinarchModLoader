@@ -98,7 +98,7 @@ namespace Ruinarch.ModContent.Templates
 		{
 			if (tm == null)
 			{
-				if (rows.Count > 0)
+				if (rows.Any(r => r.Any(c => c != '.')))
 				{
 					throw new TemplateException($"it paints {layer}, but {t.behavesLike ?? "the building it behaves like"} has no {layer} layer");
 				}
