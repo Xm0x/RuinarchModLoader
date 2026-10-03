@@ -261,8 +261,14 @@ namespace Ruinarch.ModMenu
 					GameObject line = Clone(w.Find("Gameplay Options/Misc/Log Limit"), row.transform, "Control",
 						go => UnityEngine.Object.DestroyImmediate(go.transform.Find("Log Limit Text Field").gameObject));
 					Anchor(line, 0, note / 2);
-					Fit(line.transform.Find("Lbl").GetComponent<TextMeshProUGUI>(), f.Label, 260);
+					// The cloned label sits left of the slider and grows leftwards past the row's
+					// edge; lay both out from the row's left edge instead.
+					var lbl = line.transform.Find("Lbl").GetComponent<TextMeshProUGUI>();
 					Slider slider = line.GetComponentInChildren<Slider>(true);
+					Fit(lbl, f.Label, SliderLabelWidth);
+					LeftAt(lbl.rectTransform, 0, SliderLabelWidth);
+					var sliderRect = (RectTransform)slider.transform;
+					LeftAt(sliderRect, SliderLabelWidth + 16, sliderRect.rect.width);
 					var value = slider.transform.Find("Value").GetComponent<TextMeshProUGUI>();
 					bool whole = f.Kind == SettingKind.IntSlider;
 					slider.wholeNumbers = whole;
@@ -359,6 +365,17 @@ namespace Ruinarch.ModMenu
 			rt.anchorMin = rt.anchorMax = new Vector2(0, 0.5f);
 			rt.pivot = new Vector2(0, 0.5f);
 			rt.anchoredPosition = new Vector2(x, up);
+		}
+
+		private const float SliderLabelWidth = 170;
+
+		// Pins a control to its parent's left edge, vertically centred, keeping its height.
+		private static void LeftAt(RectTransform rt, float x, float width)
+		{
+			float height = rt.rect.height;
+			rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0, 0.5f);
+			rt.anchoredPosition = new Vector2(x, 0);
+			rt.sizeDelta = new Vector2(width > 0 ? width : 220, height);
 		}
 
 		private static void Fit(TextMeshProUGUI label, string text, float width)
