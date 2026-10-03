@@ -1,7 +1,8 @@
 # Packages: installing, sharing and the Steam Workshop
 
-A **package** is one folder that RuinarchModLoader can load: a code mod (a DLL), a
-building template pack (data only), or a code mod that also ships templates. This page
+A **package** is one folder that RuinarchModLoader can load: an **assembly mod** (a
+compiled .NET assembly, a DLL, `"type": "code"`), a building template pack (data only), or
+an assembly mod that also ships templates. This page
 explains how players install packages, how authors describe and share them, and what
 the loader checks before it runs anything.
 
@@ -51,7 +52,7 @@ Every package has a `mod.json` in its root folder. This is loader API 1:
 | `author`, `description` | no | Shown in the Mods window; the description is also the Workshop description. |
 | `loader` | yes | Exactly `RuinarchModLoader`. |
 | `loaderApi` | yes | Exactly `1`, the interface version this loader supports. |
-| `type` | yes | `code` (has a DLL) or `templates` (data only). |
+| `type` | yes | `code` (an assembly mod: has a DLL) or `templates` (data only). |
 | `entryAssembly` | code only | Path of the DLL holding your mod class, relative to the folder. |
 | `entryType` | code only | Full name of your public `IRuinarchMod` class (namespace included). |
 | `dependencies` | no | Other DLLs your mod ships, as relative paths. |
@@ -84,7 +85,7 @@ older loader mods without `loader`/`loaderApi`/`type`/`entryAssembly`/`entryType
 those fields to update them), vanilla Workshop items that only contain XML class files,
 and stray DLLs placed directly in `Mods/`.
 
-Compatibility is **not** a security check. An accepted code mod runs with the same
+Compatibility is **not** a security check. An accepted assembly mod runs with the same
 rights as the game, like any mod. Install code only from authors you trust.
 
 ## Duplicates, disabling and restarts

@@ -405,7 +405,7 @@ folder, alongside `0Harmony.dll`; the loader resolves it for every mod. The fram
 has no compile-time reference to the loader: it self-installs its Harmony patches the
 first time any mod touches the API, which happens during mod load, before the game
 builds its skill and structure tables. The loader also starts it (by reflection) once
-every local mod has loaded, so template packs work with no code mod installed, and hands
+every local mod has loaded, so template packs work with no assembly mod installed, and hands
 it the folders of the template packages it accepted (`ModTemplates.SetPackDirectories`,
 local and Steam Workshop, compatible and switched on). The framework never scans for
 packs itself. `Install()` is idempotent, so calling the register methods or `Install()`

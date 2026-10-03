@@ -5,7 +5,7 @@ entrances and footprint. A **template pack** is a mod folder holding templates; 
 then uses each template as one more look for its kind of building, next to its own. Your
 pack needs no code and no Unity editor.
 
-Templates change layouts, not gameplay rules. A new building kind still needs a code mod.
+Templates change layouts, not gameplay rules. A new building kind still needs an assembly mod.
 The main-menu **Editor** creates and edits templates without external tools.
 
 ## Availability
@@ -47,7 +47,7 @@ for its hidden runtime settings.
 
 **Delete** next to a template removes its file; **Delete pack** removes a whole template
 pack folder. Both ask first and cannot be undone. Saved games that used a deleted building
-show the building it was based on. The editor never deletes code mods; remove those from
+show the building it was based on. The editor never deletes assembly mods; remove those from
 the `Mods/` folder yourself.
 
 The workspace has paint, erase, connected fill, rectangle and picker tools; the chosen
@@ -86,7 +86,7 @@ to the same saved draft. The test world is paused and is not a saved campaign.
 
 ## Start from a game building
 
-The easiest template is a copy of one of the game's buildings, then edited. A code mod (or
+The easiest template is a copy of one of the game's buildings, then edited. An assembly mod (or
 the RuinarchDebug harness) can export one:
 
     BuildingTemplate t = ModTemplates.Export(prefab, "mybuildings/stone-tavern", STRUCTURE_TYPE.TAVERN, FACTION_TYPE.None, RESOURCE.STONE);

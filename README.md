@@ -64,10 +64,10 @@ For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
 ### Version 0.7.0
 
-Code mods can add usable demonic buildings: deferred skill construction, copied skill
-settings, normal grants, placement using borrowed prefabs and charge refunds on
-destruction. Ruinarch+ 0.11.0 needs this for its Blight Heart. Mod authors: see
-[`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
+Assembly mods (compiled .NET DLLs implementing `IRuinarchMod`) can add usable demonic
+buildings: deferred skill construction, copied skill settings, normal grants, placement
+using borrowed prefabs and charge refunds on destruction. Ruinarch+ 0.11.0 needs this for
+its Blight Heart. Mod authors: see [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
 
 Fixed: saved worlds with a mod building (a Ruinarch+ Library, Town Hall or Mass Grave)
 stopped loading partway, because the game's save wrote the building's type as empty.

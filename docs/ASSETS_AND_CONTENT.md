@@ -306,7 +306,7 @@ walls, furniture, entrances and footprint in JSON. Export an existing game build
 then edit its tile rows and object coordinates. Mix stock assets with your own loose
 PNGs. A template pack needs no DLL and no Unity editor.
 
-Templates add looks for existing game kinds or kinds registered by a code mod. They do
+Templates add looks for existing game kinds or kinds registered by an assembly mod. They do
 not define new gameplay logic, and demonic buildings are outside their scope.
 
 ### Rung 4: build a new prefab as an AssetBundle (editor required, small and additive)
