@@ -189,4 +189,35 @@ namespace Ruinarch.ModContent
 			return __instance.file != Patch_ActionDescription.FixedTextFile;
 		}
 	}
+
+	/// <summary>Saves made before loader 0.7.0 hold a mod action's type as null, read as NONE,
+	/// and the game has no NONE action to rebuild the node with. A node that had begun its
+	/// action carries the state's name, which names the action. A node still on its way has
+	/// nothing else to go by: it gets the only registered action, or failing that the first
+	/// (the villager may then do the other of a mod's actions this once).</summary>
+	[HarmonyPatch(typeof(SaveDataActualGoapNode), nameof(SaveDataActualGoapNode.Load))]
+	internal static class Patch_RecoverSavedAction
+	{
+		private static void Prefix(SaveDataActualGoapNode __instance)
+		{
+			SaveDataActualGoapNode data = __instance;
+			if (data == null || data.action != INTERACTION_TYPE.NONE || ContentRegistry.ActionsByType.Count == 0)
+			{
+				return;
+			}
+			ActionRegistration first = null;
+			ActionRegistration byState = null;
+			foreach (ActionRegistration reg in ContentRegistry.ActionsByType.Values)
+			{
+				first = first ?? reg;
+				if (!string.IsNullOrEmpty(data.currentStateName) && reg.States.Exists(s => s.Name == data.currentStateName))
+				{
+					byState = reg;
+				}
+			}
+			ActionRegistration chosen = byState ?? first;
+			data.action = chosen.Type;
+			Templates.FrameworkLog.Info($"Recovered a saved {(byState != null ? "" : "unstarted ")}action as {chosen.Id} (saved by an older loader without its type).");
+		}
+	}
 }

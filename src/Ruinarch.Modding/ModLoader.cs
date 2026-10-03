@@ -45,7 +45,7 @@ namespace Ruinarch.Modding
 
 		/// <summary>This loader's release version. In-game updates offer only newer versions.
 		/// A property, not a const, so other assemblies read the installed value.</summary>
-		public static string Version => "0.6.1";
+		public static string Version => "0.7.0";
 
 		/// <summary>Absolute path to the <c>Mods/</c> root (set during init).</summary>
 		public static string ModsRoot { get; private set; }

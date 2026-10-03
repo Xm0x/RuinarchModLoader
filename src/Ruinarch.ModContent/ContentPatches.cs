@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using HarmonyLib;
 using Inner_Maps.Location_Structures;
@@ -21,8 +22,17 @@ namespace Ruinarch.ModContent
 	[HarmonyPatch(typeof(LandmarkManager), nameof(LandmarkManager.CreateNewStructureAt))]
 	internal static class Patch_CreateNewStructureAt
 	{
-		private static bool Prefix(Region location, STRUCTURE_TYPE structureType, BaseSettlement settlement, ref LocationStructure __result)
+		private static bool Prefix(Region location, ref STRUCTURE_TYPE structureType, BaseSettlement settlement, ref LocationStructure __result)
 		{
+			// A registered demonic building borrows another's prefab, and the game creates the
+			// structure from the prefab's own type: while a registered build skill places its
+			// building, the borrowed type stands for the registered one.
+			StructureRegistration placing = Patch_BuildRegisteredDemonic.Placing;
+			if (placing != null && structureType == placing.PrefabSource)
+			{
+				structureType = placing.StructureType;
+				Patch_BuildRegisteredDemonic.Placing = null;
+			}
 			if (!ContentRegistry.StructuresByType.TryGetValue((int)structureType, out StructureRegistration reg))
 			{
 				return true; // not ours - run the stock reflection factory
@@ -40,12 +50,63 @@ namespace Ruinarch.ModContent
 		}
 	}
 
+	/// <summary>Marks which registration a build skill is placing (see Patch_CreateNewStructureAt).</summary>
+	[HarmonyPatch(typeof(DemonicStructurePlayerSkill), "BuildDemonicStructure")]
+	internal static class Patch_BuildRegisteredDemonic
+	{
+		internal static StructureRegistration Placing;
+
+		private static void Prefix(DemonicStructurePlayerSkill __instance)
+		{
+			Placing = null;
+			for (int i = 0; i < ContentRegistry.Structures.Count; i++)
+			{
+				if (ContentRegistry.Structures[i].Skill == __instance)
+				{
+					Placing = ContentRegistry.Structures[i];
+					break;
+				}
+			}
+		}
+
+		private static Exception Finalizer(Exception __exception)
+		{
+			Placing = null;
+			return __exception;
+		}
+	}
+
+	/// <summary>The game finds a building's skill by parsing its enum name as a skill name
+	/// (PlayerSkillManager.GetDemonicStructureSkillData(STRUCTURE_TYPE)), which throws for a
+	/// registered type; it is used when a demonic building is destroyed.</summary>
+	[HarmonyPatch(typeof(PlayerSkillManager), nameof(PlayerSkillManager.GetDemonicStructureSkillData), new Type[] { typeof(STRUCTURE_TYPE) })]
+	internal static class Patch_SkillOfRegisteredStructure
+	{
+		private static bool Prefix(STRUCTURE_TYPE type, ref DemonicStructurePlayerSkill __result)
+		{
+			if (!ContentRegistry.StructuresByType.TryGetValue((int)type, out StructureRegistration reg))
+			{
+				return true;
+			}
+			__result = reg.Skill;
+			return false;
+		}
+	}
+
 	/// <summary>Rebuild a registered structure from a save.</summary>
 	[HarmonyPatch(typeof(LandmarkManager), nameof(LandmarkManager.LoadNewStructureAt))]
 	internal static class Patch_LoadNewStructureAt
 	{
-		private static bool Prefix(Region location, STRUCTURE_TYPE structureType, SaveDataLocationStructure saveDataLocationStructure, ref LocationStructure __result)
+		private static bool Prefix(Region location, ref STRUCTURE_TYPE structureType, SaveDataLocationStructure saveDataLocationStructure, ref LocationStructure __result)
 		{
+			// Saves made before loader 0.7.0 hold a mod structure's type as null, read as 0
+			// (see Patch_SaveVirtualEnums); find the registration again by the saved name.
+			if ((int)structureType == 0 && StructureNames.FromSavedName(saveDataLocationStructure.name) is StructureRegistration lost)
+			{
+				structureType = lost.StructureType;
+				saveDataLocationStructure.structureType = structureType;
+				Templates.FrameworkLog.Info($"Recovered '{saveDataLocationStructure.name}' as {lost.Id} (saved by an older loader without its type).");
+			}
 			if (!ContentRegistry.StructuresByType.TryGetValue((int)structureType, out StructureRegistration reg))
 			{
 				return true;
@@ -58,6 +119,22 @@ namespace Ruinarch.ModContent
 			DatabaseManager.Instance.structureDatabase.RegisterStructure(s);
 			__result = s;
 			return false;
+		}
+	}
+
+	/// <summary>The game saves through FullSerializer, which writes an enum by name. A virtual
+	/// value has no name, so it was written as null and loaded as 0: a saved world holding a
+	/// mod building then failed to load. Write any nameless value as its number instead;
+	/// the converter's own reader already accepts numbers.</summary>
+	[HarmonyPatch(typeof(FullSerializer.Internal.fsEnumConverter), nameof(FullSerializer.Internal.fsEnumConverter.TrySerialize))]
+	internal static class Patch_SaveVirtualEnums
+	{
+		private static void Postfix(object instance, ref FullSerializer.fsData serialized, Type storageType)
+		{
+			if (serialized.IsNull && instance != null && Enum.GetName(storageType, instance) == null)
+			{
+				serialized = new FullSerializer.fsData(Convert.ToInt64(instance));
+			}
 		}
 	}
 
@@ -116,15 +193,54 @@ namespace Ruinarch.ModContent
 	{
 		private static void Postfix(PlayerSkillManager __instance)
 		{
+			IDictionary assets = AccessTools.Field(typeof(PlayerSkillManager), "_playerSkillDataDictionary").GetValue(__instance) as IDictionary;
 			for (int i = 0; i < ContentRegistry.Structures.Count; i++)
 			{
 				StructureRegistration reg = ContentRegistry.Structures[i];
+				if (reg.Skill == null && reg.CreateSkill != null)
+				{
+					try
+					{
+						reg.Skill = reg.CreateSkill(reg.StructureType, reg.SkillType);
+					}
+					catch (Exception e)
+					{
+						Templates.FrameworkLog.Warning($"{reg.Id}: making its build skill failed: {e}");
+					}
+				}
 				if (reg.Skill == null)
 				{
 					continue;
 				}
 				__instance.allDemonicStructureSkillsData[reg.SkillType] = reg.Skill;
+				// GetSkillData (used when granting, saving and drawing skills) reads this table.
+				__instance.allPlayerSkillsData[reg.SkillType] = reg.Skill;
+				// Granting a skill reads its PlayerSkillData asset (charges, costs, icon); the
+				// game has none for a virtual skill, so give it a copy of a related one.
+				PLAYER_SKILL_TYPE from = SkillDataSource(__instance, reg);
+				PlayerSkillData source = from == PLAYER_SKILL_TYPE.NONE ? null : assets?[from] as PlayerSkillData;
+				if (source == null)
+				{
+					Templates.FrameworkLog.Warning($"{reg.Id}: no skill settings to copy (set SkillDataFrom); the game cannot grant its build skill");
+					continue;
+				}
+				PlayerSkillData copy = UnityEngine.Object.Instantiate(source);
+				copy.name = reg.Id;
+				copy.skill = reg.SkillType;
+				reg.ConfigureSkillData?.Invoke(copy);
+				assets[reg.SkillType] = copy;
 			}
+		}
+
+		private static PLAYER_SKILL_TYPE SkillDataSource(PlayerSkillManager manager, StructureRegistration reg)
+		{
+			if (reg.SkillDataFrom != PLAYER_SKILL_TYPE.NONE) return reg.SkillDataFrom;
+			if (reg.UnlockWith != PLAYER_SKILL_TYPE.NONE) return reg.UnlockWith;
+			foreach (KeyValuePair<PLAYER_SKILL_TYPE, DemonicStructurePlayerSkill> pair in manager.allDemonicStructureSkillsData)
+			{
+				if (pair.Value != null && pair.Value.structureType == reg.PrefabSource && (int)pair.Key < ContentRegistry.VirtualBase) return pair.Key;
+			}
+			return PLAYER_SKILL_TYPE.NONE;
 		}
 	}
 
@@ -184,6 +300,42 @@ namespace Ruinarch.ModContent
 			displayName = null;
 			return false;
 		}
+
+		/// <summary>The registration a saved structure name belongs to, or null if none or
+		/// more than one fits. The game names a structure "noun + type name" (type name first
+		/// in some languages), so the type name starts or ends it; the longest fitting name
+		/// wins, so "Hall" never shadows "Town Hall".</summary>
+		internal static StructureRegistration FromSavedName(string savedName)
+		{
+			if (string.IsNullOrEmpty(savedName))
+			{
+				return null;
+			}
+			StructureRegistration best = null;
+			int bestLength = 0;
+			bool tied = false;
+			for (int i = 0; i < ContentRegistry.Structures.Count; i++)
+			{
+				StructureRegistration reg = ContentRegistry.Structures[i];
+				TryGet(reg.StructureType, out string name);
+				if (savedName != name && !savedName.EndsWith(" " + name, StringComparison.Ordinal)
+					&& !savedName.StartsWith(name + " ", StringComparison.Ordinal))
+				{
+					continue;
+				}
+				if (name.Length > bestLength)
+				{
+					best = reg;
+					bestLength = name.Length;
+					tied = false;
+				}
+				else if (name.Length == bestLength)
+				{
+					tied = true;
+				}
+			}
+			return tied ? null : best;
+		}
 	}
 
 	/// <summary>Enum-style key, e.g. "Mass Grave" -> "MASS_GRAVE".</summary>
@@ -234,11 +386,12 @@ namespace Ruinarch.ModContent
 	}
 
 	/// <summary>Unlock: when the player gains a registration's <c>UnlockWith</c> source skill,
-	/// also grant the registered virtual skill so it appears in the dynamic build menu.</summary>
+	/// also grant the registered virtual skill the game's own way, so it is marked in use,
+	/// gets its charges and cost, and appears in the dynamic build menu.</summary>
 	[HarmonyPatch(typeof(PlayerSkillComponent), "AddAndCategorizePlayerSkill", new Type[] { typeof(SkillData), typeof(bool), typeof(bool) })]
 	internal static class Patch_UnlockRegisteredSkill
 	{
-		private static void Postfix(PlayerSkillComponent __instance, SkillData p_skillData)
+		private static void Postfix(PlayerSkillComponent __instance, SkillData p_skillData, bool testScene, bool isDevMode)
 		{
 			if (p_skillData == null)
 			{
@@ -247,36 +400,16 @@ namespace Ruinarch.ModContent
 			for (int i = 0; i < ContentRegistry.Structures.Count; i++)
 			{
 				StructureRegistration reg = ContentRegistry.Structures[i];
-				if (reg.UnlockWith == PLAYER_SKILL_TYPE.NONE || p_skillData.type != reg.UnlockWith)
+				if (reg.UnlockWith == PLAYER_SKILL_TYPE.NONE || p_skillData.type != reg.UnlockWith
+					|| __instance.demonicStructuresSkills.Contains(reg.SkillType))
 				{
 					continue;
 				}
-				if (!__instance.demonicStructuresSkills.Contains(reg.SkillType))
+				SkillData skill = PlayerSkillManager.Instance.GetDemonicStructureSkillData(reg.SkillType);
+				if (skill != null)
 				{
-				__instance.demonicStructuresSkills.Add(reg.SkillType);
-					BroadcastGained(reg.SkillType);
+					__instance.AddAndCategorizePlayerSkill(skill, testScene, isDevMode);
 				}
-			}
-		}
-
-		// Messenger is internal to Assembly-CSharp, so an external mod assembly cannot call
-		// it directly - invoke the generic Broadcast<PLAYER_SKILL_TYPE> via reflection.
-		private static void BroadcastGained(PLAYER_SKILL_TYPE skillType)
-		{
-			try
-			{
-				Type messenger = AccessTools.TypeByName("Messenger");
-				System.Reflection.MethodInfo m = AccessTools.Method(messenger, "Broadcast",
-					new Type[] { typeof(string), typeof(PLAYER_SKILL_TYPE) },
-					new Type[] { typeof(PLAYER_SKILL_TYPE) });
-				if (m != null)
-				{
-					m.Invoke(null, new object[] { PlayerSkillSignals.PLAYER_GAINED_DEMONIC_STRUCTURE, skillType });
-				}
-			}
-			catch (Exception e)
-			{
-				Debug.LogError("[ModContent] gained-skill broadcast failed: " + e);
 			}
 		}
 	}

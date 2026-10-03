@@ -71,6 +71,17 @@ simply ignores virtual content. Virtual values only surface through the specific
 reflection factories the framework patches, which is exactly the control that is
 wanted.
 
+Because they have no enum name, the game's save serializer (FullSerializer, which
+writes enums by name) would store them as `null` and read them back as `0`. The
+framework writes any enum value without a name as its number instead, which the
+serializer already reads back. Saves made before loader 0.7.0 stored `null` for
+every virtual structure and action. When such a save loads, the framework
+recognises each structure by its name, which the game builds from the structure's
+display name (for example "Painted Library"): keep `DisplayName` stable, and avoid
+one registration's display name ending another's on a word boundary. A saved
+action that had begun is recognised by its state's name; one still on its way to
+its target becomes the first registered action.
+
 ### 2. Prefix the reflection factories
 
 For a virtual value the reflection lookup above returns `null` and the stock game
@@ -87,10 +98,12 @@ patches in `ActionPatches.cs`. Method names are the exact game methods patched.
 
 | Patch | Game method | Kind | Purpose |
 |---|---|---|---|
-| `Patch_CreateNewStructureAt` | `LandmarkManager.CreateNewStructureAt` | Prefix | When the player places a registered structure, build it with the registration's `Factory`, add it to the region and settlement, initialize it, register it in the structure database, and skip the stock reflection factory. |
+| `Patch_CreateNewStructureAt` | `LandmarkManager.CreateNewStructureAt` | Prefix | When the player places a registered structure, build it with the registration's `Factory`, add it to the region and settlement, initialize it, register it in the structure database, and skip the stock reflection factory. The game takes the type from the placed prefab, which is the borrowed building's; while a registered build skill is placing (`Patch_BuildRegisteredDemonic`), that type stands for the registered one. |
+| `Patch_BuildRegisteredDemonic` | `DemonicStructurePlayerSkill.BuildDemonicStructure` | Prefix, finalizer | Remember which registration's build skill is placing a building, for `Patch_CreateNewStructureAt`. |
+| `Patch_SkillOfRegisteredStructure` | `PlayerSkillManager.GetDemonicStructureSkillData(STRUCTURE_TYPE)` | Prefix | Return the registration's skill. The game parses the building type's name as a skill name, which throws for a registered type (used when a demonic building is destroyed). |
 | `Patch_LoadNewStructureAt` | `LandmarkManager.LoadNewStructureAt` | Prefix | On save reload, rebuild a registered structure with the registration's `LoadFactory`, run `InitializeFromSave` unless it was destroyed, and register it in the structure database. |
 | `Patch_GetStructureData` | `LandmarkManager.GetStructureData` | Prefix | For a registered type, return the `StructureData` (prefab, visual, footprint) of the registration's `PrefabSource`, so no new Unity asset is required. |
-| `Patch_ConstructDemonicSkills` | `PlayerSkillManager.ConstructAllDemonicStructureSkillsData` | Postfix | After the game builds its skill dictionary from its fixed array, add each registered skill straight into `allDemonicStructureSkillsData`. The fixed-size demonic-skills array is **never** grown (see the gotcha below); only the dictionary that the build menu and `GetDemonicStructureSkillData` actually read is extended. |
+| `Patch_ConstructDemonicSkills` | `PlayerSkillManager.ConstructAllDemonicStructureSkillsData` | Postfix | After the game builds its skill dictionary from its fixed array, add each registered skill (made by `CreateSkill` if needed) straight into `allDemonicStructureSkillsData` and `allPlayerSkillsData`, and give it a `PlayerSkillData` asset: a copy of `SkillDataFrom`'s with its skill type changed. Granting a skill reads that asset (charges, costs, icon) and the game has none for a virtual skill. The fixed-size demonic-skills array is **never** grown (see the gotcha below); only the dictionaries that the build menu, `GetSkillData` and `GetDemonicStructureSkillData` actually read are extended. |
 | `Patch_IsPlayerStructure` | `Extensions.IsPlayerStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsPlayerStructure` flag is set. The game has no separate "demonic" switch: a demonic (player-built) structure is a player structure. |
 | `Patch_IsSpecialStructure` | `Extensions.IsSpecialStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsSpecialStructure` flag is set. |
 | `Patch_IsVillageStructure` | `Extensions.IsVillageStructure(STRUCTURE_TYPE)` | Postfix | Return `true` for a registered type when its `IsVillageStructure` flag is set, so villagers treat it as a normal village building (placement rules, settlement ownership). |
@@ -202,10 +215,23 @@ public sealed class StructureRegistration
     // the structure in the demonic build menu.
     public DemonicStructurePlayerSkill Skill;
 
+    // Makes Skill when the game builds its skill tables (at the main menu). Use this
+    // instead of Skill: the game's skill constructors read game state (the text
+    // tables), so `new` in OnLoad throws. Receives the allocated types.
+    public Func<STRUCTURE_TYPE, PLAYER_SKILL_TYPE, DemonicStructurePlayerSkill> CreateSkill;
+
     // If set, the structure's skill is granted whenever the player gains this
     // source skill, so it appears alongside a related structure. NONE means the
     // mod grants the skill itself.
     public PLAYER_SKILL_TYPE UnlockWith = PLAYER_SKILL_TYPE.NONE;
+
+    // Whose settings the build skill copies (icon, mana cost, charges, cooldown):
+    // the game needs a PlayerSkillData asset for every skill it grants. NONE takes
+    // UnlockWith, else the skill that builds PrefabSource.
+    public PLAYER_SKILL_TYPE SkillDataFrom = PLAYER_SKILL_TYPE.NONE;
+
+    // Optional: adjust the copied settings (for example the icon) before use.
+    public Action<PlayerSkillData> ConfigureSkillData;
 
     // Classification flags mirrored into the game's Extensions switches. A demonic
     // (player-built) structure is IsPlayerStructure; a normal village building that
@@ -265,8 +291,12 @@ var registration = ModContent.RegisterStructure(new StructureRegistration {
     // Borrow an existing structure's visual so no new art is needed to start.
     PrefabSource = STRUCTURE_TYPE.CRYPT,
 
-    // The build skill that adds your structure to the build menu.
-    Skill = new YourStructureData(),
+    // The build skill that adds your structure to the build menu. Made later, when
+    // the game builds its skill tables: a skill constructor throws in OnLoad.
+    CreateSkill = (structure, skill) => new YourStructureData(structure, skill),
+
+    // Copy the Crypt's skill settings: icon, mana cost, charges by level.
+    SkillDataFrom = PLAYER_SKILL_TYPE.CRYPT,
 
     // Show it in the menu wherever this existing skill is unlocked.
     UnlockWith = PLAYER_SKILL_TYPE.CRYPT,
@@ -277,9 +307,12 @@ STRUCTURE_TYPE type = ModContent.StructureTypeFor("yourmod.thing");
 PLAYER_SKILL_TYPE skill = ModContent.SkillTypeFor("yourmod.thing");
 ```
 
-Your build-skill class should resolve its own `type` getter lazily through
-`ModContent.SkillTypeFor(id)`, so it reads the correct virtual value after
-registration.
+Your build-skill class receives the allocated types in its constructor: return the
+skill type from its `type` getter and set its `structureType` to the structure type.
+The building is created as your type even though it uses the borrowed prefab.
+Granting the skill (with `UnlockWith`, or by calling
+`PlayerManager.Instance.player.playerSkillComponent.AddAndCategorizePlayerSkill`
+once a world is running) puts it in the build menu.
 
 ## Saving your mod's data: `ModSave`
 

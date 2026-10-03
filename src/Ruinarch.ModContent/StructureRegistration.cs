@@ -49,11 +49,30 @@ namespace Ruinarch.ModContent
 		public DemonicStructurePlayerSkill Skill;
 
 		/// <summary>
+		/// Makes <see cref="Skill"/> when the game builds its skill tables (at the main menu),
+		/// for skills that cannot be constructed in <c>OnLoad</c>: the game's skill classes
+		/// read game state in their constructors. Receives the allocated structure and skill
+		/// types. Used when <see cref="Skill"/> is null.
+		/// </summary>
+		public Func<STRUCTURE_TYPE, PLAYER_SKILL_TYPE, DemonicStructurePlayerSkill> CreateSkill;
+
+		/// <summary>
 		/// If set, the structure's build-skill is granted to the player whenever they gain
 		/// this source skill (e.g. <c>PLAYER_SKILL_TYPE.CRYPT</c>), so it shows in the menu
 		/// alongside a thematically-related structure. <c>NONE</c> = mod grants it itself.
 		/// </summary>
 		public PLAYER_SKILL_TYPE UnlockWith = PLAYER_SKILL_TYPE.NONE;
+
+		/// <summary>
+		/// Whose settings to copy for the build-skill: icon, mana cost, charges and cooldown by
+		/// level. The game needs this <c>PlayerSkillData</c> asset for every skill it grants.
+		/// <c>NONE</c> takes <see cref="UnlockWith"/>, else the skill that builds
+		/// <see cref="PrefabSource"/>.
+		/// </summary>
+		public PLAYER_SKILL_TYPE SkillDataFrom = PLAYER_SKILL_TYPE.NONE;
+
+		/// <summary>Optional: adjust the copied settings (for example the icon) before use.</summary>
+		public Action<PlayerSkillData> ConfigureSkillData;
 
 		/// <summary>Classification flags mirrored into the game's <c>Extensions</c> switches.
 		/// A demonic (player-built) structure is <c>IsPlayerStructure</c>; the game has no

@@ -33,7 +33,11 @@ cp "$MOD_BUILD_DIR"/patcher/Ruinarch.ModMenu.dll "$dist/"
 # Docs + example source
 cp "$MOD_PROJECT_DIR/README.md" "$dist/"
 cp "$MOD_PROJECT_DIR/LICENSE" "$dist/"
-cp -r "$MOD_PROJECT_DIR/docs" "$dist/"
+mkdir -p "$dist/docs"
+for doc in "$MOD_PROJECT_DIR"/docs/*; do
+  [ "$(basename "$doc")" = plans ] && continue
+  cp -r "$doc" "$dist/docs/"
+done
 cp "$MOD_PROJECT_DIR"/examples/ExampleMod/*.cs "$dist/examples/ExampleMod/"
 cp "$MOD_PROJECT_DIR"/examples/ExampleMod/mod.json "$dist/examples/ExampleMod/"
 
