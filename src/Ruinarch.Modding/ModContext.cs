@@ -21,12 +21,17 @@ namespace Ruinarch.Modding
 		/// <summary>Logger scoped to this mod (Player.log + Mods/mods.log).</summary>
 		public ModLogger Logger { get; }
 
+		/// <summary>This mod's settings: register a class to get a Mods tab entry in the game's
+		/// Settings window and a saved file in <c>Mods/settings/</c>. Needs <c>"loaderApi": 2</c>.</summary>
+		public SettingsHandle Settings { get; }
+
 		internal ModContext(ModInfo info, string modDirectory, string modsRoot, ModLogger logger)
 		{
 			Info = info;
 			ModDirectory = modDirectory;
 			ModsRoot = modsRoot;
 			Logger = logger;
+			Settings = new SettingsHandle(info, modsRoot, logger);
 		}
 	}
 }

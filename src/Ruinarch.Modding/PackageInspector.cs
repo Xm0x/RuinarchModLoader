@@ -12,7 +12,8 @@ namespace Ruinarch.Modding
 	/// <summary>Reads JSON and PE metadata only. Never loads a package assembly.</summary>
 	public static class PackageInspector
 	{
-		public const int LoaderApi = 1;
+		/// <summary>Manifest API versions this loader accepts. API 2 adds <c>context.Settings</c>.</summary>
+		public static readonly int[] LoaderApis = { 1, 2 };
 		private static readonly HashSet<string> Fields = new HashSet<string> { "id", "name", "version", "author", "description", "loader", "loaderApi", "type", "entryAssembly", "entryType", "dependencies" };
 		private static readonly HashSet<string> Reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Ruinarch.Modding", "Ruinarch.ModContent", "Ruinarch.ModMenu", "0Harmony", "Mono.Cecil", "Assembly-CSharp", "Assembly-CSharp-firstpass", "mscorlib", "netstandard" };
 		internal static void ReserveGameAssemblies(string managed)
@@ -36,7 +37,7 @@ namespace Ruinarch.Modding
 				if (!Regex.IsMatch((string)json["id"], "^[a-z0-9][a-z0-9._-]*$")) throw new InvalidDataException("Invalid package id; use lowercase letters, digits, dots, underscores or hyphens.");
 				if (!Regex.IsMatch((string)json["version"], "^[0-9]+\\.[0-9]+\\.[0-9]+$") || !Version.TryParse((string)json["version"], out Version _)) throw new InvalidDataException("version must be major.minor.patch.");
 				if ((string)json["loader"] != "RuinarchModLoader") throw new InvalidDataException("loader must be RuinarchModLoader.");
-				if (json["loaderApi"]?.Type != JTokenType.Integer || (long)json["loaderApi"] != LoaderApi) throw new InvalidDataException("Unsupported loaderApi; this loader supports API " + LoaderApi + ".");
+				if (json["loaderApi"]?.Type != JTokenType.Integer || !LoaderApis.Contains((int)(long)json["loaderApi"])) throw new InvalidDataException("Unsupported loaderApi; this loader supports API " + string.Join(" and ", LoaderApis) + ".");
 				foreach (string field in new[] { "author", "description", "entryAssembly", "entryType" })
 					if (json[field] != null && json[field].Type != JTokenType.String) throw new InvalidDataException(field + " must be a string.");
 				if (json["dependencies"] != null && (!(json["dependencies"] is JArray deps) || deps.Any(d => d.Type != JTokenType.String))) throw new InvalidDataException("dependencies must be an array of relative DLL paths.");

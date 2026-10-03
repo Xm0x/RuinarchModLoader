@@ -68,6 +68,63 @@ shipped game switches Unity logging off once it starts initializing the world
 `Mods/logs/mods-<date>_<time>.log` (named by when it was last written); the newest 20
 are kept.
 
+## Settings
+
+Players change your mod's options in the game: the Settings window has a **Mods** tab that
+lists every installed mod with settings. You describe the options once, as a class; the
+loader draws the controls, saves the values and writes changes straight into your object.
+
+```csharp
+using Ruinarch.Modding;
+using UnityEngine;   // for [Range]
+
+[ModSettings("My Mod")]
+public class MyModSettings
+{
+    [Section("Monsters")]
+    [Setting("Angry wolves", "Wolves attack anyone they see.")]
+    public bool angryWolves = true;
+
+    [Setting("Pack size"), Range(1, 12)]
+    public int packSize = 4;
+
+    [Setting("Hunger per hour"), Range(0f, 2f)]
+    public float hunger = 0.5f;
+
+    [Setting("Starting season"), RequiresRestart]
+    public Season season = Season.Spring;
+
+    public int[] notShown = { 1, 2 };   // no [Setting]: saved, not shown
+}
+
+public class MyMod : IRuinarchMod
+{
+    internal static MyModSettings Settings;
+
+    public void OnLoad(ModContext context)
+    {
+        Settings = context.Settings.Register<MyModSettings>();
+        context.Settings.Changed += field => { /* only if you must react to a change */ };
+    }
+}
+```
+
+- `bool` is a checkbox, `int` and `float` are sliders (they need `[Range]`), an `enum` is a
+  dropdown of its names. Any other type, or a number without `[Range]`, is not shown; the
+  reason is written to `Mods/mods.log`.
+- `[Section("...")]` starts a header that covers the following fields up to the next one.
+- Read your fields where you use them (`MyMod.Settings.packSize`); the loader writes a change
+  into the same object at once.
+- Mark a field `[RequiresRestart]` when you read it only while loading. Its change is saved,
+  your object keeps the old value until the next start, and the tab shows "Restart to apply".
+- `Changed` is raised on the main thread after a change is saved, with the field's name.
+- Values are saved in `Mods/settings/<your mod id>.json`, outside your mod folder, so they
+  survive updates. Fields missing from the file get your defaults, names your class no longer
+  has are dropped, numbers are kept inside their `[Range]`, and a file that cannot be read is
+  renamed to `.json.bad` while your mod starts on its defaults.
+- A mod that uses settings must declare `"loaderApi": 2` in `mod.json` and needs
+  RuinarchModLoader 0.8.0 or newer. Older loaders refuse it with a clear message.
+
 ## Patching the game with Harmony
 
 `0Harmony.dll` is installed into `Mods/` and resolved for every mod. Create a

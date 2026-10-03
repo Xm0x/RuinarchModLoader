@@ -51,7 +51,7 @@ Every package has a `mod.json` in its root folder. This is loader API 1:
 | `version` | yes | `major.minor.patch`, for example `1.2.0`. |
 | `author`, `description` | no | Shown in the Mods window; the description is also the Workshop description. |
 | `loader` | yes | Exactly `RuinarchModLoader`. |
-| `loaderApi` | yes | Exactly `1`, the interface version this loader supports. |
+| `loaderApi` | yes | `1`, or `2` for a mod that uses settings (`context.Settings`, RuinarchModLoader 0.8.0 or newer). |
 | `type` | yes | `code` (an assembly mod: has a DLL) or `templates` (data only). |
 | `entryAssembly` | code only | Path of the DLL holding your mod class, relative to the folder. |
 | `entryType` | code only | Full name of your public `IRuinarchMod` class (namespace included). |
@@ -69,7 +69,7 @@ The loader reads `mod.json` and the DLL files' metadata (with Mono.Cecil) **with
 running or loading them**. A package is accepted only when:
 
 - `mod.json` is valid JSON with the fields above, `loader` is `RuinarchModLoader` and
-  `loaderApi` is 1;
+  `loaderApi` is 1 or 2;
 - every path stays inside the package folder, and the folder contains no symbolic links;
 - a code package's entry type exists in its entry DLL, is public, not abstract, has a
   public constructor without parameters, and implements `Ruinarch.Modding.IRuinarchMod`;

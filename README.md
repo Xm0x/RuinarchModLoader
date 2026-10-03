@@ -62,6 +62,10 @@ Release authors: see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
+### Version 0.8.0
+
+Mod settings: mods describe their options with attributes and players change them in the game's Settings window, in a new Mods tab. Values are saved in `Mods/settings/`. Mods that use it declare `"loaderApi": 2`; see [Settings](docs/WRITING_MODS.md#settings).
+
 ### Version 0.7.0
 
 Assembly mods (compiled .NET DLLs implementing `IRuinarchMod`) can add usable demonic
