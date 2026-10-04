@@ -24,7 +24,7 @@ namespace Ruinarch.Modding
 		public float Min { get; internal set; }
 		public float Max { get; internal set; }
 		public bool RequiresRestart { get; internal set; }
-		/// <summary>The enum's names, in declaration order (dropdowns only).</summary>
+		/// <summary>The enum's names, in the order of their values (dropdowns only).</summary>
 		public IReadOnlyList<string> Options { get; internal set; }
 	}
 
@@ -111,6 +111,9 @@ namespace Ruinarch.Modding
 		private RegisteredSettings() { }
 
 		internal static void Add(RegisteredSettings s) => _all.Add(s);
+
+		/// <summary>Drops a mod's settings from <see cref="All"/>, so a mod that failed to load is not listed.</summary>
+		internal static void Remove(string modId) => _all.RemoveAll(s => s.ModId == modId);
 
 		/// <summary>Reads the class's fields, then loads and rewrites the file. Not added to <see cref="All"/>.</summary>
 		internal static RegisteredSettings Create(object target, string modId, string title, string filePath, ModLogger log, SettingsHandle handle)

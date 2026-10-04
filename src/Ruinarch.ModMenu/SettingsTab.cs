@@ -226,17 +226,17 @@ namespace Ruinarch.ModMenu
 		private static void SettingRow(RegisteredSettings mod, SettingField f)
 		{
 			Transform w = _window.transform;
-			float note = f.RequiresRestart ? 16 : 0;
-			GameObject row;
+			// Every row has the same height, with room at the bottom for the restart note, so the
+			// spacing stays even whether or not a setting needs a restart.
+			GameObject row = Row("Setting: " + f.Name, RowHeight, f.Description);
 			switch (f.Kind)
 			{
 				case SettingKind.Toggle:
 				{
-					row = Row("Setting: " + f.Name, 40 + note, f.Description);
 					GameObject box = Clone(w.Find("Gameplay Options/Controls/EdgePanning"), row.transform, "Control");
-					Anchor(box, 10, note / 2);
+					Anchor(box, 10, NoteHeight / 2);
 					var label = box.GetComponentInChildren<TextMeshProUGUI>(true);
-					Fit(label, f.Label, 360);
+					Label(label, f.Label, ToggleLabelWidth);
 					Toggle toggle = box.GetComponent<Toggle>();
 					toggle.SetIsOnWithoutNotify((bool)mod.Get(f));
 					toggle.onValueChanged.AddListener(v => Guard(f.Name, () => { mod.Set(f, v); UpdateNote(row, mod, f); }));
@@ -244,10 +244,9 @@ namespace Ruinarch.ModMenu
 				}
 				case SettingKind.Dropdown:
 				{
-					row = Row("Setting: " + f.Name, 56 + note, f.Description);
 					GameObject pick = Clone(w.Find("Gameplay Options/Language/Language"), row.transform, "Control");
-					Anchor(pick, 0, note / 2);
-					Fit(pick.transform.Find("Title").GetComponent<TextMeshProUGUI>(), f.Label, 150);
+					Anchor(pick, 0, NoteHeight / 2);
+					Label(pick.transform.Find("Title").GetComponent<TextMeshProUGUI>(), f.Label, 150);
 					TMP_Dropdown dropdown = pick.GetComponentInChildren<TMP_Dropdown>(true);
 					dropdown.ClearOptions();
 					dropdown.AddOptions(f.Options.ToList());
@@ -257,19 +256,22 @@ namespace Ruinarch.ModMenu
 				}
 				default:
 				{
-					row = Row("Setting: " + f.Name, 50 + note, f.Description);
 					GameObject line = Clone(w.Find("Gameplay Options/Misc/Log Limit"), row.transform, "Control",
 						go => UnityEngine.Object.DestroyImmediate(go.transform.Find("Log Limit Text Field").gameObject));
-					Anchor(line, 0, note / 2);
-					// The cloned label sits left of the slider and grows leftwards past the row's
-					// edge; lay both out from the row's left edge instead.
+					Anchor(line, 0, NoteHeight / 2);
+					// The cloned label sits left of the slider, right-aligned, and grows leftwards past
+					// the row's edge; lay both out from the row's left edge instead, with the label in
+					// the same column as the checkbox labels.
 					var lbl = line.transform.Find("Lbl").GetComponent<TextMeshProUGUI>();
 					Slider slider = line.GetComponentInChildren<Slider>(true);
-					Fit(lbl, f.Label, SliderLabelWidth);
-					LeftAt(lbl.rectTransform, 0, SliderLabelWidth);
+					Label(lbl, f.Label, SliderLabelWidth);
+					lbl.alignment = TextAlignmentOptions.MidlineLeft;
+					LeftAt(lbl.rectTransform, LabelColumn, SliderLabelWidth);
 					var sliderRect = (RectTransform)slider.transform;
-					LeftAt(sliderRect, SliderLabelWidth + 16, sliderRect.rect.width);
+					LeftAt(sliderRect, LabelColumn + SliderLabelWidth + 10, SliderWidth);
 					var value = slider.transform.Find("Value").GetComponent<TextMeshProUGUI>();
+					var valueRect = value.rectTransform;
+					valueRect.anchoredPosition = new Vector2(SliderWidth / 2, valueRect.anchoredPosition.y);
 					bool whole = f.Kind == SettingKind.IntSlider;
 					slider.wholeNumbers = whole;
 					slider.minValue = f.Min;
@@ -290,8 +292,8 @@ namespace Ruinarch.ModMenu
 			GameObject restart = Clone(w.Find("Gameplay Options/Misc/Log Limit/Slider/Value"), row.transform, "Restart Note");
 			var noteRect = (RectTransform)restart.transform;
 			noteRect.anchorMin = noteRect.anchorMax = noteRect.pivot = new Vector2(0, 0);
-			noteRect.anchoredPosition = new Vector2(f.Kind == SettingKind.Toggle ? 55 : 10, 0);
-			noteRect.sizeDelta = new Vector2(300, 16);
+			noteRect.anchoredPosition = new Vector2(LabelColumn, 0);
+			noteRect.sizeDelta = new Vector2(300, NoteHeight);
 			var noteText = restart.GetComponent<TextMeshProUGUI>();
 			noteText.text = "Restart to apply";
 			noteText.alignment = TextAlignmentOptions.BottomLeft;
@@ -367,7 +369,12 @@ namespace Ruinarch.ModMenu
 			rt.anchoredPosition = new Vector2(x, up);
 		}
 
-		private const float SliderLabelWidth = 170;
+		private const float RowHeight = 56, NoteHeight = 16;
+		// The checkbox labels' text starts 55 px into the row (the checkbox clone sits at 10, its
+		// label 34 px inside it, and the text has its own inner margin; measured on screen);
+		// slider labels and the restart note use the same column.
+		private const float LabelColumn = 55, ToggleLabelWidth = 460, SliderLabelWidth = 300, SliderWidth = 120;
+		private const float LabelFontSize = 18;
 
 		// Pins a control to its parent's left edge, vertically centred, keeping its height.
 		private static void LeftAt(RectTransform rt, float x, float width)
@@ -375,15 +382,17 @@ namespace Ruinarch.ModMenu
 			float height = rt.rect.height;
 			rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0, 0.5f);
 			rt.anchoredPosition = new Vector2(x, 0);
-			rt.sizeDelta = new Vector2(width > 0 ? width : 220, height);
+			rt.sizeDelta = new Vector2(width, height);
 		}
 
-		private static void Fit(TextMeshProUGUI label, string text, float width)
+		// Every setting label gets one fixed size, so labels match from row to row; a label too long
+		// for its column wraps.
+		private static void Label(TextMeshProUGUI label, string text, float width)
 		{
 			label.text = text;
-			label.enableAutoSizing = true;
-			label.fontSizeMin = 14;
-			label.fontSizeMax = 24;
+			label.enableAutoSizing = false;
+			label.fontSize = LabelFontSize;
+			label.enableWordWrapping = true;
 			var rt = label.rectTransform;
 			rt.sizeDelta = new Vector2(width - (rt.anchorMax.x - rt.anchorMin.x) * ((RectTransform)rt.parent).rect.width, rt.sizeDelta.y);
 		}

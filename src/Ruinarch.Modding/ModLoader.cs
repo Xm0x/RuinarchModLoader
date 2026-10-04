@@ -257,6 +257,8 @@ namespace Ruinarch.Modding
 			{
 				mod.FailureReason = e.GetBaseException().Message;
 				Debug.LogError($"[ModLoader] Package '{mod.Id}' failed during activation: {e}");
+				// A failed mod is not listed in the Mods settings tab, even if it registered before failing.
+				RegisteredSettings.Remove(mod.Id);
 			}
 		}
 
