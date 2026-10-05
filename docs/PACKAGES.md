@@ -115,10 +115,15 @@ one of your local packs together with the PNG files it uses.
 
 1. Put the package folder in `Ruinarch/Mods/` and start the game through Steam. Its row
    in the Mods window must not show the exclamation mark.
-2. Optional: add `preview.png` to the package folder; it becomes the item's picture.
+2. Optional: add `preview.png` to the package folder, or choose a picture path in the
+   upload panel. Use a non-empty PNG, JPG or GIF smaller than 1 MB.
 3. Open **Mods -> Upload to Workshop**, choose the package, and:
    - leave **Existing Workshop item id** empty to create a new item, or enter the number
      of an item you own to update it;
+   - enter **Workshop picture** as an absolute path or a path relative to the package
+     folder. Leave it blank to use the package's `preview.png`; if that file is absent,
+     an update keeps the existing picture. Under Proton, an external Linux file uses
+     its Windows-visible path, for example `Z:\home\deniz\Downloads\picture.png`;
    - pick the visibility. New items are **Private** unless you choose otherwise; for an
      update, **Keep current visibility** leaves it unchanged;
    - optionally write a change note (the default is `Version <version>`).
@@ -129,6 +134,11 @@ one of your local packs together with the PNG files it uses.
 The package is checked again just before uploading. The whole package folder is uploaded,
 with its `mod.json` title and description and the tag `RuinarchModLoader`. The loader is
 never uploaded: tell your players to install RuinarchModLoader first.
+
+Missing explicitly chosen pictures, unsupported extensions, and empty or oversized
+files are rejected before a new Workshop item is created. Steam's
+[SetItemPreview](https://partner.steamgames.com/doc/api/ISteamUGC#SetItemPreview)
+sets the primary picture; it is submitted with the content update.
 
 ## Logs
 

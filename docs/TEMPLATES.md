@@ -132,6 +132,10 @@ Positions are in the building's own units: one unit is one tile.
 Tilemap cells and prefab-local object positions can have different origins in stock
 buildings. The editor converts between them; do not assume furniture coordinates
 equal floor cell indices.
+When `footprint` is omitted, floor cell centers are converted through the borrowed
+tilemap's transform into root-local cells, then offset by `center` for native placement.
+Resizing or changing `center` therefore does not shift logical ownership away from
+the painted floor. An omitted `clickBox` fits those cells in collider-local space.
 
 ## Cultures
 

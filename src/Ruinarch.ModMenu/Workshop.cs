@@ -137,19 +137,20 @@ namespace Ruinarch.ModMenu
 		private readonly KnownMod _package;
 		private readonly ERemoteStoragePublishedFileVisibility? _visibility;
 		private readonly string _note;
+		private readonly string _preview;
 		private readonly Action<string> _status;
 
 		internal static bool Busy => _current != null;
 		internal ulong ItemId { get; private set; }
 
-		private WorkshopUpload(KnownMod package, ulong itemId, ERemoteStoragePublishedFileVisibility? visibility, string note, Action<string> status)
+		private WorkshopUpload(KnownMod package, ulong itemId, ERemoteStoragePublishedFileVisibility? visibility, string note, string preview, Action<string> status)
 		{
-			_package = package; ItemId = itemId; _visibility = visibility; _note = note; _status = status;
+			_package = package; ItemId = itemId; _visibility = visibility; _note = note; _preview = preview; _status = status;
 		}
 
 		/// <summary>Starts an upload. <paramref name="itemId"/> 0 creates a new item, which then
 		/// needs an explicit <paramref name="visibility"/> (default Private). Null keeps an existing item's visibility.</summary>
-		internal static void Start(KnownMod package, ulong itemId, ERemoteStoragePublishedFileVisibility? visibility, string note, Action<string> status)
+		internal static void Start(KnownMod package, ulong itemId, ERemoteStoragePublishedFileVisibility? visibility, string note, string preview, Action<string> status)
 		{
 			if (_current != null) throw new InvalidOperationException("An upload is already running.");
 			if (!Workshop.Ready) throw new InvalidOperationException("Steam is not available. Start the game through Steam to upload.");
@@ -159,8 +160,31 @@ namespace Ruinarch.ModMenu
 			if (!again.Compatible) throw new InvalidOperationException("Not compatible with RuinarchModLoader: " + again.RejectionReason);
 			if (again.Id != package.Id) throw new InvalidOperationException("The package id changed on disk; restart the game first.");
 			if (itemId == 0 && visibility == null) visibility = ERemoteStoragePublishedFileVisibility.k_ERemoteStoragePublishedFileVisibilityPrivate;
-			_current = new WorkshopUpload(again, itemId, visibility, note, status);
+			string picture = ResolvePreview(again.Directory, preview);
+			_current = new WorkshopUpload(again, itemId, visibility, note, picture, status);
 			_current.Begin();
+		}
+
+		// Resolve and validate before CreateItem: a bad picture must not leave an empty draft.
+		internal static string ResolvePreview(string directory, string input)
+		{
+			bool explicitPath = !string.IsNullOrWhiteSpace(input);
+			string path = Path.GetFullPath(Path.Combine(directory, explicitPath ? input.Trim() : "preview.png"));
+			if (!File.Exists(path))
+			{
+				if (!explicitPath) return null; // No picture supplied: keep the existing image.
+				throw new InvalidOperationException("Workshop picture not found: " + path);
+			}
+			string extension = Path.GetExtension(path);
+			if (!string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase)
+				&& !string.Equals(extension, ".jpg", StringComparison.OrdinalIgnoreCase)
+				&& !string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase)
+				&& !string.Equals(extension, ".gif", StringComparison.OrdinalIgnoreCase))
+				throw new InvalidOperationException("The Workshop picture must be a PNG, JPG or GIF.");
+			long bytes = new FileInfo(path).Length;
+			if (bytes == 0 || bytes >= 1024 * 1024)
+				throw new InvalidOperationException("The Workshop picture must be non-empty and smaller than 1 MB. Resize or compress it first.");
+			return path;
 		}
 
 		/// <summary>Bytes processed and total while Steam uploads; false when not uploading.</summary>
@@ -204,8 +228,11 @@ namespace Ruinarch.ModMenu
 				&& SteamUGC.SetItemDescription(_handle, _package.Info.description ?? "")
 				&& SteamUGC.SetItemContent(_handle, _package.Directory)
 				&& SteamUGC.SetItemTags(_handle, new List<string> { Workshop.Tag });
-			string preview = Path.Combine(_package.Directory, "preview.png");
-			if (ok && File.Exists(preview)) ok = SteamUGC.SetItemPreview(_handle, preview);
+			if (ok && _preview != null && !SteamUGC.SetItemPreview(_handle, _preview))
+			{
+				Finish("Steam rejected the Workshop picture: " + _preview + ". Check its image format and size.", false);
+				return;
+			}
 			if (ok && _visibility.HasValue) ok = SteamUGC.SetItemVisibility(_handle, _visibility.Value);
 			if (!ok)
 			{

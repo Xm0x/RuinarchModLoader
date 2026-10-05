@@ -333,6 +333,7 @@ namespace Ruinarch.ModMenu
 				EditorUI.Button(list, $"{mod.Info.name} ({mod.Id}) v{mod.Info.version}", () => { chosen = mod; chosenLabel.text = "Package: " + mod.Info.name + "  (" + mod.Directory + ")"; });
 			}
 			chosenLabel = EditorUI.Label(col.transform, "Choose a package above.", 17);
+			var preview = EditorUI.Input(col.transform, "", null, "Workshop picture: PNG/JPG/GIF path (blank uses package preview.png; under 1 MB)");
 			var item = EditorUI.Input(col.transform, "", null, "Existing Workshop item id (leave blank to create a new item)");
 			var note = EditorUI.Input(col.transform, "", null, "Change note (optional)");
 			int visibility = 1;
@@ -349,7 +350,7 @@ namespace Ruinarch.ModMenu
 					if (chosen == null) throw new InvalidOperationException("Choose a package first.");
 					ulong id = 0;
 					if (!string.IsNullOrWhiteSpace(item.text) && !ulong.TryParse(item.text.Trim(), out id)) throw new InvalidOperationException("The item id must be a number.");
-					WorkshopUpload.Start(chosen, id, Visibilities[visibility].value, note.text, s => { if (status != null) status.text = s; });
+					WorkshopUpload.Start(chosen, id, Visibilities[visibility].value, note.text, preview.text, s => { if (status != null) status.text = s; });
 				}
 				catch (Exception e) { status.text = e.Message; }
 			});

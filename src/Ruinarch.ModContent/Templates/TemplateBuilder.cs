@@ -53,7 +53,7 @@ namespace Ruinarch.ModContent.Templates
 				lso.roomTemplates = t.rooms.Select(r => new RoomTemplate { coordinatesInRoom = r.Select(Cell).ToArray() }).ToArray();
 				AccessTools.Field(typeof(LocationStructureObject), "_size").SetValue(lso, new Vector2Int(t.size[0], t.size[1]));
 				AccessTools.Field(typeof(LocationStructureObject), "_center").SetValue(lso, Cell(t.center));
-				List<Vector3Int> occupied = t.footprint != null ? t.footprint.Select(Cell).ToList() : FloorCells(t);
+				List<Vector3Int> occupied = t.footprint != null ? t.footprint.Select(Cell).ToList() : OccupiedFloor(lso, t);
 				AccessTools.Field(typeof(LocationStructureObject), "_predeterminedOccupiedCoordinates").SetValue(lso, occupied);
 				// The game's own rule: the 8 neighbours of occupied cells that are not occupied.
 				lso.DetermineBorderCoordinates();
@@ -85,6 +85,21 @@ namespace Ruinarch.ModContent.Templates
 						cells.Add(new Vector3Int(t.bounds[0] + i, t.bounds[1] + t.bounds[3] - 1 - r, 0));
 					}
 				}
+			}
+			return cells;
+		}
+
+		// Floor rows use tilemap cells; native footprints use root-local cells plus center.
+		// Templates use unit cells; dormant Tilemap coordinate APIs return zero even with a Grid.
+		private static List<Vector3Int> OccupiedFloor(LocationStructureObject lso, BuildingTemplate t)
+		{
+			List<Vector3Int> cells = FloorCells(t);
+			Tilemap ground = TemplateExporter.Field<Tilemap>(lso, "_groundTileMap");
+			for (int i = 0; i < cells.Count; i++)
+			{
+				Vector3 cellCenter = new Vector3(cells[i].x + 0.5f, cells[i].y + 0.5f, 0f);
+				Vector3 local = lso.transform.InverseTransformPoint(ground.transform.TransformPoint(cellCenter));
+				cells[i] = Vector3Int.FloorToInt(local) + lso.center;
 			}
 			return cells;
 		}
@@ -306,9 +321,10 @@ namespace Ruinarch.ModContent.Templates
 				box.size = new Vector2(t.clickBox.size[0], t.clickBox.size[1]);
 				return;
 			}
-			Tilemap ground = TemplateExporter.Field<Tilemap>(lso, "_groundTileMap");
-			Vector3 low = box.transform.InverseTransformPoint(ground.CellToWorld(new Vector3Int(occupied.Min(c => c.x), occupied.Min(c => c.y), 0)));
-			Vector3 high = box.transform.InverseTransformPoint(ground.CellToWorld(new Vector3Int(occupied.Max(c => c.x) + 1, occupied.Max(c => c.y) + 1, 0)));
+			Vector3 low = box.transform.InverseTransformPoint(lso.transform.TransformPoint(
+				new Vector3(occupied.Min(c => c.x) - lso.center.x - .5f, occupied.Min(c => c.y) - lso.center.y - .5f, 0)));
+			Vector3 high = box.transform.InverseTransformPoint(lso.transform.TransformPoint(
+				new Vector3(occupied.Max(c => c.x) - lso.center.x + .5f, occupied.Max(c => c.y) - lso.center.y + .5f, 0)));
 			box.offset = (low + high) / 2f;
 			box.size = new Vector2(Mathf.Abs(high.x - low.x), Mathf.Abs(high.y - low.y));
 		}

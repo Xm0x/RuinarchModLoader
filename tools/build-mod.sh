@@ -47,9 +47,9 @@ rm -f "$rsp"
   || { rm -f "$outdir/$name.dll"; echo "patch check FAILED for $name" >&2; exit 1; }
 
 [ -f "$src/mod.json" ] && cp "$src/mod.json" "$outdir/"
-# Deploy the mod's loose assets (art, audio, bundles) next to its DLL so a mod can
-# ship PNGs/WAVs/AssetBundles and resolve them at runtime under its own folder.
-for assetdir in art audio bundles; do
+[ -f "$src/preview.png" ] && cp "$src/preview.png" "$outdir/"
+# Deploy loose assets and building templates next to the DLL.
+for assetdir in art audio bundles templates; do
   if [ -d "$src/$assetdir" ]; then
     rm -rf "${outdir:?}/$assetdir"
     cp -r "$src/$assetdir" "$outdir/$assetdir"

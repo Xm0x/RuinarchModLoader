@@ -62,6 +62,15 @@ Release authors: see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
 
+### Version 0.9.0
+
+The Workshop upload panel accepts a primary-picture path, with package-root
+`preview.png` as the default. Missing, empty, unsupported or oversized pictures are
+reported before creating an item. See [Uploading your package](docs/PACKAGES.md#uploading-your-package).
+
+Template footprints follow the rendered floor after resizing or changing the building's
+center, including borrowed tilemaps with a different local origin.
+
 ### Version 0.8.0
 
 Mod settings: mods describe their options with attributes and players change them in the game's Settings window, in a new Mods tab. Values are saved in `Mods/settings/`. Mods that use it declare `"loaderApi": 2`; see [Settings](docs/WRITING_MODS.md#settings).
