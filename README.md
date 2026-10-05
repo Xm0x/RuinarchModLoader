@@ -49,44 +49,6 @@ browse the Workshop, upload your own package, read `mods.log`, and open the `Mod
 folder. Installing, sharing and the Workshop are explained in
 [`docs/PACKAGES.md`](docs/PACKAGES.md).
 
-### Updating
-
-From version 0.6.0 the loader updates itself. When a newer release is out, the main menu
-shows a notice with an **Update** button. The download is checked against a signature
-made by the release author, and the new version installs the next time you start the
-game. You still need the installer after a Steam update of Ruinarch (click
-**Reinstall**), and the notice says so when a release needs it. Coming from 0.5.0 or
-older, run the installer once.
-
-Release authors: see [`docs/RELEASING.md`](docs/RELEASING.md).
-
-For ready-made mods, see [RuinarchMods](https://github.com/Xm0x/RuinarchMods).
-
-### Version 0.9.0
-
-The Workshop upload panel accepts a primary-picture path, with package-root
-`preview.png` as the default. Missing, empty, unsupported or oversized pictures are
-reported before creating an item. See [Uploading your package](docs/PACKAGES.md#uploading-your-package).
-
-Template footprints follow the rendered floor after resizing or changing the building's
-center, including borrowed tilemaps with a different local origin.
-
-### Version 0.8.0
-
-Mod settings: mods describe their options with attributes and players change them in the game's Settings window, in a new Mods tab. Values are saved in `Mods/settings/`. Mods that use it declare `"loaderApi": 2`; see [Settings](docs/WRITING_MODS.md#settings).
-
-### Version 0.7.0
-
-Assembly mods (compiled .NET DLLs implementing `IRuinarchMod`) can add usable demonic
-buildings: deferred skill construction, copied skill settings, normal grants, placement
-using borrowed prefabs and charge refunds on destruction. Ruinarch+ 0.11.0 needs this for
-its Blight Heart. Mod authors: see [`docs/CONTENT_FRAMEWORK.md`](docs/CONTENT_FRAMEWORK.md).
-
-Fixed: saved worlds with a mod building (a Ruinarch+ Library, Town Hall or Mass Grave)
-stopped loading partway, because the game's save wrote the building's type as empty.
-New saves keep the type, and saves made with older versions load again: each such
-building is recognised by its name.
-
 ## Writing a mod
 
 A mod is a class that implements `IRuinarchMod`. `examples/ExampleMod/` is a
