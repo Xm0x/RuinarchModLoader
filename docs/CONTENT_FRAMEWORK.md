@@ -352,6 +352,61 @@ the objects exist by then. Keep the id stable across versions, or older saves
 lose their data. A handler that throws is logged and skipped; it never stops the
 game saving or loading, or the other mods.
 
+### The handler contract
+
+Residency (below) swaps your state between worlds with the same two callbacks, so
+they must own **all** of your world-scoped state:
+
+- `save()` must not change any state.
+- `load(null)` must clear every bit of world-scoped state your mod keeps.
+- `load(json)` must restore exactly what `save()` produced.
+- State your mod keeps outside a handler (a static list of characters, a cache keyed
+  by settlement) leaks between resident worlds, and between games in one session.
+
+## Residency: keeping a second world in memory
+
+`Residency` (`src/Ruinarch.ModContent/Residency/`) travels between two native
+saves without reloading the one it left: that world is frozen in memory (no
+ticking, drawing, pathfinding or physics; every object, job and listener kept),
+and switching back takes well under a second instead of a full native reload.
+
+```csharp
+public void OnLoad(ModContext context)
+{
+    Residency.Enable();   // before the first game scene loads
+}
+
+// later, after saving the world you are leaving:
+Residency.Travel(destinationSavePath, result =>
+{
+    if (!result.Succeeded) Log.Warning(result.ToString());   // FailedStage + Reason
+});
+```
+
+- **`Enable()`** installs the residency patches (Harmony id
+  `ruinarch.modcontent.residency`). `ModContent.Install()` never does, so players
+  whose mods do not call it get none of them. It must run before the first game
+  scene loads: a world loaded earlier cannot be frozen.
+- **`Travel(savePath, done)`** freezes the active world and loads `savePath` beside
+  it, or, when `savePath` is the retained world, switches back to it. A world is
+  identified by the save it was loaded from
+  (`SaveCurrentProgressManager.currentSaveDataPath`), not by later manual saves.
+  Travel never saves: save the world you leave first. At most one world is
+  retained; travelling to a third save unloads it.
+- **Refusals** (`FailedStage == Validate`, nothing changed): a travel already
+  running, no game, `Enable` too late, a missing save, the active world's own save,
+  the game saving, a game script with a pending `Invoke`, or a coroutine started by
+  name (neither can be paused).
+- **Failures** from `Freeze` on roll back: a partly loaded destination is unloaded
+  and the world you left is reactivated as it was. `Rollback` means even that
+  failed.
+- **Your mod's state** follows its world through `ModSave` (contract above). After
+  every switch back, each handler's `save()` must equal what it returned when that
+  world froze; a difference is logged as an error naming the handler id.
+- **Not isolated:** anything process-wide outside the framework's inventory (see the
+  spec, `docs/specs/2026-10-09-residency-core-design.md`). Ruinarch+ is not yet
+  compliant.
+
 ## Gotchas
 
 - **`Messenger` is internal to `Assembly-CSharp`.** An external mod assembly

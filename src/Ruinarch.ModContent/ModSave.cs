@@ -101,6 +101,26 @@ namespace Ruinarch.ModContent
 			}
 		}
 
+		// Residency: each handler's current state, keyed by id (null = handler stores nothing).
+		internal static Dictionary<string, string> CaptureAll()
+		{
+			var captured = new Dictionary<string, string>();
+			foreach (KeyValuePair<string, Handler> kv in Handlers)
+			{
+				Call(kv.Key, "capture", () => captured[kv.Key] = kv.Value.Save());
+			}
+			return captured;
+		}
+
+		// Residency: hand each handler the state it had when its world froze.
+		internal static void RestoreAll(Dictionary<string, string> captured)
+		{
+			foreach (KeyValuePair<string, Handler> kv in Handlers)
+			{
+				Call(kv.Key, "restore", () => kv.Value.Load(captured.TryGetValue(kv.Key, out string json) ? json : null));
+			}
+		}
+
 		// One mod's broken data never stops the game saving or loading, or the other mods.
 		private static void Call(string id, string what, Action a)
 		{
